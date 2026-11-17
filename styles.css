@@ -136,3 +136,25 @@ tfoot th, tfoot td { font-weight: 800; }
 }
 .dashboard > :only-child { grid-column: 1 / -1; }
 .final p { overflow-wrap: anywhere; }
+
+@media (max-width: 759px) {
+  .panel[aria-labelledby="round-title"] { padding: 10px 13px; }
+  .panel[aria-labelledby="round-title"] .panel-heading { margin-bottom: 7px; }
+  #round-form .teams { gap: 4px; }
+  #round-form .team {
+    display: grid;
+    grid-template-columns: minmax(0, 27%) minmax(0, 1fr);
+    align-items: center;
+    gap: 0 6px;
+    padding: 3px 5px;
+    border-radius: 9px;
+  }
+  #round-form .team > label { text-align: center; font-size: 13px; line-height: 1.5; }
+  #round-form .team > select { margin: 0; min-height: 44px; padding-block: 3px; }
+  #round-form .team-fields { grid-column: 1 / -1; margin-top: 5px; gap: 5px; }
+  #round-form .hand-inputs { gap: 5px; }
+  #round-form .hand-inputs:empty { display: none; }
+  #round-form .penalty { margin-top: 7px; }
+  #round-form .preview { margin-block: 8px; padding: 5px 7px; text-align: center; }
+  #round-form .controls .primary { min-height: 44px; padding-block: 4px; }
+}
