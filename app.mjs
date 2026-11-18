@@ -1,9 +1,18 @@
+import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.5.0';
 import { openKabru } from './kabru.mjs?v=2.4.0';
-import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.3.1';
+import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.5.0';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
 const notice = document.querySelector('#notice');
+const archiveDialog = document.querySelector('#archive-dialog');
+const archiveButton = document.querySelector('#archive-open');
+const archiveContent = document.querySelector('#archive-content');
+const dateFormat = new Intl.DateTimeFormat('ar', {
+  numberingSystem: 'latn', dateStyle: 'medium', timeStyle: 'short',
+});
+let selectedArchive = null;
+let pendingArchiveDelete = null;
 const number = new Intl.NumberFormat('ar', { numberingSystem: 'latn', maximumFractionDigits: 12 });
 const teams = ['الفريق الأول', 'الفريق الثاني', 'الفريق الثالث'];
 const players = ['اللاعب الأول', 'اللاعب الثاني', 'اللاعب الثالث', 'اللاعب الرابع', 'اللاعب الخامس'];
@@ -40,11 +49,26 @@ function announce(message) {
 }
 
 function persist(next) {
+  const previous = match;
   match = next;
+  let archivedSuccessfully = true;
   try {
-    if (next) saveMatch(storage, next);
+    if (next && (next.endedAt == null || previous?.rounds !== next.rounds) && matchStandings().complete) {
+      const entries = readArchive(storage);
+      const archived = archiveMatch(entries, next);
+      if (archived.entries !== entries) {
+        writeArchive(storage, archived.entries);
+      }
+      match = archived.match;
+    }
+  } catch {
+    archivedSuccessfully = false;
+    announce('تعذّر حفظ المباراة في السجل.');
+  }
+  try {
+    if (match) saveMatch(storage, match);
     else storage.removeItem(STORAGE_KEY);
-    return true;
+    return archivedSuccessfully;
   } catch {
     announce('تعذر الحفظ في هذا المتصفح. تبقى التغييرات في الصفحة الحالية.');
     return false;
@@ -77,6 +101,13 @@ function cards(totals, winners = []) {
     </div>`).join('')}</div>`;
 }
 
+function resultsTable(names, totals, rows, title) {
+  return `<table class="${names.length === 5 ? 'five-columns' : ''}" aria-labelledby="${title}"><thead><tr><th scope="col">اللعبة</th>
+      ${names.map(name => `<th scope="col">${escape(name)}</th>`).join('')}</tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><th scope="row">المجموع</th>
+      ${totals.map(total => `<td>${display(total)}</td>`).join('')}</tr></tfoot></table>`;
+}
+
 function history(limit, totals) {
   const overflow = match.rounds.length > limit;
   const rows = Array.from({ length: Math.max(limit, match.rounds.length) }, (_, index) => {
@@ -92,11 +123,11 @@ function history(limit, totals) {
   }).join('');
   return `<section class="panel history-panel" aria-labelledby="history-title">
     <div class="panel-heading"><h2 id="history-title"><span class="history-icon" aria-hidden="true">▤</span> سجل اللعبات</h2>
-      <button class="secondary" type="button" id="undo" ${match.rounds.length ? '' : 'disabled'}><span aria-hidden="true">↶</span> التراجع عن آخر لعبة</button></div>
-    <table class="${totals.length === 5 ? 'five-columns' : ''}" aria-labelledby="history-title"><thead><tr><th scope="col">اللعبة</th>
-      ${match.names.map(name => `<th scope="col">${escape(name)}</th>`).join('')}</tr></thead>
-      <tbody>${rows}</tbody><tfoot><tr><th scope="row">المجموع</th>
-      ${totals.map(total => `<td>${display(total)}</td>`).join('')}</tr></tfoot></table>
+      <div class="history-controls">
+        <button class="secondary" type="button" id="undo" ${match.rounds.length ? '' : 'disabled'}>↶ تراجع</button>
+        <button class="secondary" type="button" id="redo" ${match.redo?.length ? '' : 'disabled'}>↷ إعادة</button>
+      </div></div>
+    ${resultsTable(match.names, totals, rows, 'history-title')}
     ${overflow ? '<p class="subtle history-note">اللعبات المعلّقة محفوظة خارج المجموع. تعود إلى الحساب إذا امتدت المباراة مجدداً.</p>' : ''}
   </section>`;
 }
@@ -446,7 +477,7 @@ app.addEventListener('submit', event => {
       invalid.reportValidity();
       return;
     }
-    persist({ mode, names: inputs.map(input => input.value.trim()), rounds: [] });
+    persist({ id: crypto.randomUUID(), mode, names: inputs.map(input => input.value.trim()), rounds: [] });
     editing = null;
     manualIndex = null;
     draft = blank();
@@ -454,7 +485,7 @@ app.addEventListener('submit', event => {
   } else if (event.target.id === 'round-form') {
     try {
       const rounds = withDraft();
-      const saved = persist({ ...match, rounds, pending: undefined });
+      const saved = persist({ ...match, rounds, redo: [], pending: undefined });
       const message = editing === null ? 'تم اعتماد اللعبة.' : 'تم حفظ التعديل.';
       editing = null;
       manualIndex = null;
@@ -506,10 +537,15 @@ app.addEventListener('click', ({ target }) => {
     rememberDraft();
     renderManual();
     updatePreview();
-  } else if ('delete' in button.dataset || button.id === 'undo') {
-    const index = button.id === 'undo' ? match.rounds.length - 1 : Number(button.dataset.delete);
-    if (button.id !== 'undo' && !confirm(`حذف اللعبة ${number.format(index + 1)}؟`)) return;
-    const rounds = removeRound(match.rounds, index);
+  } else if ('delete' in button.dataset || button.id === 'undo' || button.id === 'redo') {
+    const redo = button.id === 'redo';
+    const undo = button.id === 'undo';
+    const index = undo ? match.rounds.length - 1 : redo ? match.rounds.length : Number(button.dataset.delete);
+    if (!undo && !redo && !confirm(`حذف اللعبة ${number.format(index + 1)}؟`)) return;
+    const next = undo || redo ? moveRound(match, redo)
+      : { ...match, rounds: removeRound(match.rounds, index), redo: [] };
+    if (next === match) return;
+    const { rounds } = next;
     if (editing === index || (editing === null && matchStandings(rounds).complete)) {
       editing = null;
       manualIndex = null;
@@ -517,9 +553,11 @@ app.addEventListener('click', ({ target }) => {
     } else if (editing !== null && editing > index) {
       editing -= 1;
     }
-    const saved = persist({ ...match, rounds, pending: { draft, editing, manualIndex } });
-    refresh('#round-title');
-    if (saved) announce('تم حذف اللعبة.');
+    const saved = persist({ ...next, pending: { draft, editing, manualIndex } });
+    const nextButton = button.id === 'redo' && !match.redo?.length ? '#undo'
+      : button.id === 'undo' && !match.rounds.length ? '#redo' : '#' + button.id;
+    refresh(undo || redo ? nextButton : '#round-title');
+    if (saved) announce(redo ? 'تمت إعادة اللعبة.' : undo ? 'تم التراجع عن اللعبة.' : 'تم حذف اللعبة.');
   } else if (button.id === 'cancel') {
     editing = null;
     manualIndex = null;
@@ -541,4 +579,80 @@ reset.addEventListener('click', () => {
   refresh('#setup-mode');
 });
 
+function archiveSummary(entry) {
+  const mode = entry.mode === 'solo' ? 'فردي' : 'أفرقة';
+  const winner = entry.winners.length === 1 ? 'الفائز' : 'تعادل في المركز الأول';
+  return `<span class="subtle">${dateFormat.format(entry.endedAt)} · ${mode}</span>
+    <strong>${entry.names.map(escape).join(' · ')}</strong>
+    <span>${winner}: ${entry.winners.map(index => escape(entry.names[index])).join('، ')}</span>`;
+}
+
+function renderArchive(entries = readArchive(storage)) {
+  const entry = entries.find(item => item.id === selectedArchive);
+  if (entry) {
+    const rows = entry.scores.map((scores, index) => `<tr><th scope="row">${number.format(index + 1)}
+      ${index >= entry.limit ? '<small class="subtle">معلّقة</small>' : ''}</th>
+      ${scores.map(score => `<td>${display(score)}</td>`).join('')}</tr>`).join('');
+    archiveContent.innerHTML = `<button type="button" class="secondary" data-archive-action="list">العودة إلى السجل</button>
+      <div class="archive-summary" id="archive-detail">${archiveSummary(entry)}</div>
+      ${resultsTable(entry.names, entry.totals, rows, 'archive-detail')}`;
+    archiveContent.querySelector('button').focus();
+    return;
+  }
+  selectedArchive = null;
+  archiveContent.innerHTML = entries.length ? `<ul class="archive-list">${entries.map(item => `
+    <li data-archive-id="${escape(item.id)}">
+      <button class="archive-summary" type="button" data-archive-action="detail">${archiveSummary(item)}</button>
+      <div class="history-controls">
+        <button type="button" class="secondary" data-archive-action="delete">حذف</button>
+      </div>${pendingArchiveDelete === item.id ? `
+        <div class="archive-delete" role="group" aria-label="تأكيد حذف المباراة">
+          <p class="subtle">هل تريد حذف هذه المباراة من السجل؟</p>
+          <div class="history-controls">
+            <button type="button" class="secondary" data-archive-action="confirm-delete">تأكيد الحذف</button>
+            <button type="button" class="secondary" data-archive-action="cancel-delete">إلغاء</button>
+          </div>
+        </div>` : ''}
+    </li>`).join('')}</ul>` : '<p class="subtle">لا توجد مباريات مكتملة في السجل.</p>';
+}
+
+archiveButton.addEventListener('click', () => {
+  selectedArchive = null;
+  pendingArchiveDelete = null;
+  try {
+    renderArchive();
+  } catch {
+    archiveContent.textContent = 'تعذّر فتح سجل المباريات.';
+  }
+  archiveDialog.showModal();
+});
+document.querySelector('#archive-close').addEventListener('click', () => archiveDialog.close());
+archiveContent.addEventListener('click', event => {
+  const button = event.target.closest('[data-archive-action]');
+  if (!button) return;
+  const action = button.dataset.archiveAction;
+  const id = button.closest('[data-archive-id]')?.dataset.archiveId;
+  try {
+    let entries = readArchive(storage);
+    pendingArchiveDelete = action === 'delete' ? id : null;
+    if (action === 'list' || action === 'detail') {
+      selectedArchive = id ?? null;
+    } else if (action === 'confirm-delete') {
+      entries = entries.filter(entry => entry.id !== id);
+      writeArchive(storage, entries);
+    }
+    renderArchive(entries);
+    if (action === 'delete') archiveContent.querySelector('[data-archive-action="cancel-delete"]')?.focus();
+    else if (action !== 'detail') document.querySelector('#archive-close').focus();
+  } catch {
+    archiveContent.textContent = 'تعذّر تحديث سجل المباريات.';
+  }
+});
+
+try {
+  readArchive(storage);
+} catch {
+  // The calculator can still run if the archive is unavailable.
+}
+if (match) persist({ ...match, id: match.id ?? crypto.randomUUID() });
 render();

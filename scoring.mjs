@@ -165,8 +165,13 @@ export function loadMatch(storage) {
     const config = matchConfig(match);
     for (const round of match.rounds) scoreRound(round, config);
     if (standings(match.rounds, config).totals.some(total => !Number.isFinite(total))) return null;
-    const { names, rounds, mode, pending } = match;
-    return { names, rounds, ...(mode === undefined ? {} : { mode }), ...(pending ? { pending } : {}) };
+    const { names, rounds, mode, pending, id, endedAt } = match;
+    const redo = Array.isArray(match.redo) && rounds.length + match.redo.length <= 7 ? match.redo : [];
+    for (const round of redo) scoreRound(round, config);
+    return { names, rounds, ...(mode === undefined ? {} : { mode }), ...(pending ? { pending } : {}),
+      ...(typeof id === 'string' ? { id } : {}),
+      ...(Number.isFinite(endedAt) ? { endedAt } : {}),
+      ...(redo.length ? { redo } : {}) };
   } catch {
     return null;
   }

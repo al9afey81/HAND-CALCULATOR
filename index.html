@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="calculator-version" content="2.4.0">
+  <meta name="calculator-version" content="2.5.0">
   <meta name="theme-color" content="#123e31">
   <meta name="description" content="حساب نقاط لعبة الهند للأفرقة واللعب الفردي.">
   <title>حاسبة الهند – النخبة</title>
-  <link rel="stylesheet" href="./styles.css?v=2.4.0">
+  <link rel="stylesheet" href="./styles.css?v=2.5.0">
 </head>
 <body>
   <header class="masthead">
@@ -25,7 +25,15 @@
     <button class="primary" id="apply-update" type="button">تحديث الآن</button>
   </aside>
   <main id="app" class="shell"></main>
-  <footer class="version">الإصدار <bdi>2.4.0</bdi></footer>
+  <div class="archive-launch shell"><button id="archive-open" class="secondary" type="button">سجل المباريات</button></div>
+  <dialog id="archive-dialog" aria-labelledby="archive-title">
+    <section class="panel">
+      <div class="panel-heading"><h2 id="archive-title">سجل المباريات</h2>
+        <button id="archive-close" class="secondary" type="button" autofocus>إغلاق</button></div>
+      <div id="archive-content"></div>
+    </section>
+  </dialog>
+  <footer class="version">الإصدار <bdi>2.5.0</bdi></footer>
   <div id="notice" role="status" aria-live="polite"></div>
   <dialog id="kabru-dialog" aria-labelledby="kabru-title">
     <div class="kabru-screen">
@@ -38,7 +46,7 @@
       </div>
     </div>
   </dialog>
-  <script type="module" src="./app.mjs?v=2.4.0"></script>
-  <script type="module" src="./updates.mjs?v=2.4.0"></script>
+  <script type="module" src="./app.mjs?v=2.5.0"></script>
+  <script type="module" src="./updates.mjs?v=2.5.0"></script>
 </body>
 </html>
