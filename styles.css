@@ -80,6 +80,8 @@ main { padding-block: clamp(12px, 1.8vw, 30px) max(32px, env(safe-area-inset-bot
 h2 { font-size: 18px; }
 .subtle { font-size: 12px; color: var(--muted); line-height: 1.85; }
 .setup form { display: grid; gap: 12px; margin-top: 16px; }
+#setup-names { display: grid; gap: 12px; }
+#setup-names:empty { display: none; }
 label { display: block; font-size: 12px; font-weight: 700; }
 input, select { display: block; width: 100%; padding: 8px 10px; margin-top: 4px; background: #fff; color: #20332b; border: 1px solid #cbd8cd; border-radius: 9px; font-size: 16px; }
 .primary { border: 0; border-radius: 10px; padding: 8px 15px; background: var(--green); color: #fff; font-weight: 700; font-size: 13px; }
@@ -88,7 +90,7 @@ input, select { display: block; width: 100%; padding: 8px 10px; margin-top: 4px;
 .score-title, .panel-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 12px; margin-bottom: 12px; }
 .scoreboard h2 { font-size: clamp(14px, 2.5vw, 42px); }
 .progress { color: #fff1dc; background: #93a98555; border-radius: 99px; padding: 2px .8em; font-size: clamp(10px, 1.65vw, 28px); font-weight: 700; }
-.scores, .preview-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.scores, .preview-scores { display: grid; grid-template-columns: repeat(var(--participants), minmax(0, 1fr)); gap: 6px; }
 .score-card { text-align: center; border: 1px solid #b9ac86; background: #ffffff08; border-radius: clamp(9px, 1.7vw, 29px); padding: 8px 3px; overflow-wrap: anywhere; }
 .score-card h3 { font-size: clamp(11px, 2.6vw, 44px); color: #f7ebd2; }
 .score-card b { font-size: clamp(18px, 4vw, 68px); line-height: 1.25; }
@@ -96,19 +98,28 @@ input, select { display: block; width: 100%; padding: 8px 10px; margin-top: 4px;
 .score-card.leading { border-color: var(--gold); }
 .dashboard { display: grid; gap: 15px; align-items: start; }
 .teams { display: grid; gap: 8px; }
-.team { padding: 10px; border: 1px solid var(--line); background: #f6f8f3; border-radius: 12px; min-width: 0; }
+.team { padding: 5px 8px; border: 1px solid var(--line); background: #f6f8f3; border-radius: 12px; min-width: 0; }
 .team.selected { border-color: #479371; background: #edf6ed; }
 .team label, th, .preview-scores > div { overflow-wrap: anywhere; }
-.team-fields { margin-top: 12px; display: grid; gap: 8px; }
+.team-fields { margin-top: 4px; display: grid; gap: 3px; }
 .team-fields:empty { display: none; }
-.hand-inputs { display: grid; gap: 8px; }
+.hand-inputs { display: grid; gap: 4px; }
+.hand-inputs:empty { display: none; }
 .preview { background: #edf3eb; padding: 11px; border-radius: 11px; margin-block: 13px; }
 .preview-scores > div { text-align: center; font-size: 10px; }
 .preview-scores b { display: block; font-size: 16px; }
 .negative { color: #146442; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .controls .primary { flex: 1; }
-.penalty { margin-top: 12px; }
+.round-field {
+  display: grid;
+  grid-template-columns: minmax(0, 27%) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.round-field > label { text-align: center; }
+.round-field > select { margin: 0; min-height: 44px; padding-block: 3px; }
+#round-form > .round-field { margin-top: 4px; }
 .error { color: #a03424; font-size: 12px; margin-block: 7px; }
 table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; text-align: center; }
 th, td { padding: 7px 2px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
@@ -151,10 +162,36 @@ tfoot th, tfoot td { font-weight: 800; }
   }
   #round-form .team > label { text-align: center; font-size: 13px; line-height: 1.5; }
   #round-form .team > select { margin: 0; min-height: 44px; padding-block: 3px; }
-  #round-form .team-fields { grid-column: 1 / -1; margin-top: 5px; gap: 5px; }
+  #round-form .team-fields { grid-column: 1 / -1; margin-top: 3px; gap: 2px; }
   #round-form .hand-inputs { gap: 5px; }
-  #round-form .hand-inputs:empty { display: none; }
-  #round-form .penalty { margin-top: 7px; }
   #round-form .preview { margin-block: 8px; padding: 5px 7px; text-align: center; }
   #round-form .controls .primary { min-height: 44px; padding-block: 4px; }
 }
+
+.pencil {
+  min-width: 28px;
+  min-height: 36px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font-size: 16px;
+  vertical-align: middle;
+}
+.manual-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px;
+  margin-block: 8px;
+}
+.manual-controls label { flex: 1 1 130px; }
+@media (max-width: 600px) {
+  td .pencil { display: block; margin-inline: auto; }
+  .pencil { min-height: 44px; min-width: min(44px, 100%); }
+  .scores.five-scores .score-card b { font-size: clamp(13px, 4vw, 22px); }
+}
+
+#round-form .team > select { margin-top: 0; }
+#round-form .preview { margin-block: 6px; }
+.panel[aria-labelledby="round-title"] .panel-heading { margin-bottom: 5px; }

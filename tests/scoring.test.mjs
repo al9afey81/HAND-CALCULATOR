@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { cardValue, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
 
 function round(type = 0, penalty = null, down = [[], [], []], winner = 0) {
-  return { type, penalty, down, winner };
+  return { type, penalty, down, winner, ...(type === 2 ? { jokerCount: 1 } : {}) };
 }
 
 const cases = [
@@ -66,7 +66,7 @@ test('إعادة الحساب بعد التعديل والحذف والتراج�
 });
 
 test('النتيجة النهائية تسمح بالتعادل في أقل مجموع', () => {
-  const zeroHands = [[0, 0], [0, 0], [0, 0]];
+  const zeroHands = [[0, 0], [0, 0], []];
   const rounds = [round(1, 2, zeroHands, 0), round(1, 2, zeroHands, 1),
     round(0, null, zeroHands, 0), round(0, null, zeroHands, 1), round(0, null, zeroHands, 2)];
   assert.deepEqual(standings(rounds).winners, [0, 1]);
@@ -85,3 +85,101 @@ test('حفظ المباراة واستعادتها من التخزين في جل
   entries.set(STORAGE_KEY, '{اختبار');
   assert.equal(loadMatch(session()), null);
 });
+
+const phaseTwoModes = [
+  { mode: 'teams', count: 2 },
+  { mode: 'teams', count: 3 },
+  { mode: 'solo', count: 3 },
+  { mode: 'solo', count: 4 },
+  { mode: 'solo', count: 5 },
+];
+const factors = [1, 2, 4, 8, 16, 24, 12, 20, 28];
+
+for (const config of phaseTwoModes) {
+  const { mode, count } = config;
+  const seats = mode === 'solo' ? 1 : 2;
+  const regular = (type = 0) => round(type, null, Array.from({ length: count }, () => []));
+  test(`${mode} / ${count}: جميع أنواع الفوز والنزول والشرهة`, () => {
+    for (const [type, factor] of factors.entries()) {
+      const data = regular(type);
+      assert.deepEqual(scoreRound(data, config), [-30 * factor, ...Array(count - 1).fill(100 * seats * factor)]);
+      data.down[1] = [10];
+      data.penalty = 1;
+      const scores = scoreRound(data, config);
+      assert.equal(scores[1], ((seats - 1) * 100 + 10 + (type === 0 ? 0 : 25)) * factor);
+      assert.equal(scores[0], -30 * factor);
+      assert.ok(scores.slice(2).every(score => score === 100 * seats * factor));
+    }
+  });
+
+  test(`${mode} / ${count}: الغرامات مستقلة عن الشرهة والنزول`, () => {
+    for (const [kind, units] of [1, 2, 3, 1, 2, 3, 4].entries()) {
+      const data = { ...regular(1), failed: [kind, kind], penalty: 1 };
+      data.down[1] = Array(seats).fill(10);
+      const scores = scoreRound(data, config);
+      assert.equal(scores[0], -60);
+      assert.equal(scores[1], 20 * seats + 50 + units * 100 * seats);
+      assert.ok(scores.slice(2).every(score => score === 200 * seats));
+    }
+  });
+
+  test(`${mode} / ${count}: مجموع الجياكر المتاحة والإعلان باللون`, () => {
+    const failed = [null, 2];
+    assert.doesNotThrow(() => recordRound([], { ...regular(1), failed }, 0, config));
+    assert.throws(() => recordRound([], { ...regular(2), failed }, 0, config), /الجياكر/);
+    assert.doesNotThrow(() => recordRound([], { ...regular(2), jokerCount: 0, failed }, 0, config));
+    assert.throws(() => recordRound([], { ...regular(2), jokerCount: null }, 0, config), /حدّد/);
+    assert.throws(() => recordRound([], { ...regular(5), failed: [null, 3] }, 0, config), /الجياكر/);
+    assert.doesNotThrow(() => recordRound([], { ...regular(4), failed: [null, 4] }, 0, config));
+    if (count > 2) {
+      assert.throws(() => recordRound([], { ...regular(3), failed: [null, 1, 0] }, 0, config), /الجياكر/);
+      assert.doesNotThrow(() => recordRound([], { ...regular(3), failed: [null, 1, 3] }, 0, config));
+    }
+  });
+
+  test(`${mode} / ${count}: منع النزول في الخامسة أو السابعة حسب حد المباراة`, () => {
+    const four = Array.from({ length: 4 }, () => regular());
+    const downRound = regular(1);
+    downRound.down[1] = [10];
+    const five = recordRound(four, downRound, 4, config);
+    assert.deepEqual(five[4].down[1], []);
+    assert.equal(standings([...four, downRound], config).totals[1], 600 * seats);
+
+    const extended = regular(2);
+    extended.down[1] = [10];
+    const fifth = recordRound(four, extended, 4, config);
+    assert.deepEqual(fifth[4].down[1], [10]);
+    const sixth = recordRound(fifth, downRound, 5, config);
+    const seventh = recordRound(sixth, downRound, 6, config);
+    assert.deepEqual(seventh[6].down[1], []);
+    assert.equal(standings([...sixth, downRound], config).totals[1], standings(seventh, config).totals[1]);
+    const shortened = recordRound(seventh, regular(), 4, config);
+    assert.equal(standings(shortened, config).limit, 5);
+    assert.equal(standings(shortened, config).totals[1], 500 * seats);
+  });
+
+  test(`${mode} / ${count}: حد اللعبات والحفظ واستبدال النقاط`, () => {
+    const firstFour = Array.from({ length: 4 }, () => regular());
+    const five = recordRound(firstFour, regular(1), 4, config);
+    assert.equal(standings(five, config).complete, true);
+    for (const type of [2, 3, 4, 5, 6, 7, 8]) {
+      const extended = recordRound(firstFour, regular(type), 4, config);
+      assert.equal(standings(extended, config).limit, 7);
+      const six = recordRound(extended, regular(), 5, config);
+      const seven = recordRound(six, regular(), 6, config);
+      assert.equal(standings(seven, config).complete, true);
+      assert.throws(() => recordRound(seven, regular(), 7, config));
+    }
+    const overridden = { ...regular(1), overrides: ['+١٥٠', '−٥'] };
+    let rounds = recordRound([], overridden, 0, config);
+    assert.deepEqual(standings(rounds, config).totals.slice(0, 2), [150, -5]);
+    rounds = recordRound(rounds, { ...overridden, overrides: [null, 0] }, 0, config);
+    assert.deepEqual(standings(rounds, config).totals.slice(0, 2), [-60, 0]);
+    assert.throws(() => scoreRound({ ...overridden, overrides: ['abc'] }, config));
+    const entries = new Map();
+    const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) };
+    const match = { mode, names: Array.from({ length: count }, (_, index) => `اسم ${index}`), rounds };
+    saveMatch(storage, match);
+    assert.deepEqual(loadMatch(storage), match);
+  });
+}
