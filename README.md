@@ -36,3 +36,7 @@ node --test
 بعد الموافقة على النشر، ارفع ملفات المشروع إلى فرع `main` في المستودع. افتح **Settings → Pages**، واختر **Deploy from a branch**، ثم **main** والمجلد **/(root)** واضغط **Save**. يعرض GitHub عنوان الموقع بعد اكتمال النشر. تستخدم الصفحة مسارات نسبية وتعمل من عنوان المشروع الفرعي دون إعداد خادم خلفي.
 
 [دليل إعداد مصدر النشر في GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+
+## إصدار الحاسبة
+
+عند نشر إصدار جديد، حدّث رقم الإصدار في وسم `calculator-version` وفي التذييل وروابط CSS ووحدات JavaScript في `index.html`، وفي رابط استيراد `scoring.mjs` في `app.mjs`. تتحقق الحاسبة من الإصدار المنشور عند الفتح والعودة إليها، ويعيد زر التحديث تحميل الصفحة من المصدر نفسه. تُحفظ بيانات المباراة في التخزين المحلي للمصدر نفسه.

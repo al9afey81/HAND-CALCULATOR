@@ -3,23 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="calculator-version" content="2.1.0">
   <meta name="theme-color" content="#123e31">
   <meta name="description" content="حساب نقاط لعبة الهند للأفرقة واللعب الفردي.">
   <title>حاسبة الهند – النخبة</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=2.1.0">
 </head>
 <body>
   <header class="masthead">
     <div class="masthead-inner">
       <div class="masthead-top">
+        <button id="check-update" type="button" aria-label="التحقق من تحديث الحاسبة" title="التحقق من تحديث الحاسبة" hidden>↻</button>
         <h1><span aria-hidden="true">♠</span> حاسبة الهند <span aria-hidden="true">♠</span></h1>
         <button id="reset" class="reset" type="button" hidden>مباراة جديدة <span aria-hidden="true">+</span></button>
       </div>
       <div class="edition-panel" role="img" aria-label="النخبة"></div>
     </div>
   </header>
+  <aside class="update-banner shell" id="update-banner" hidden>
+    <span role="status">يتوفر تحديث جديد</span>
+    <button class="primary" id="apply-update" type="button">تحديث الآن</button>
+  </aside>
   <main id="app" class="shell"></main>
+  <footer class="version">الإصدار <bdi>2.1.0</bdi></footer>
   <div id="notice" role="status" aria-live="polite"></div>
-  <script type="module" src="./app.mjs"></script>
+  <script type="module" src="./app.mjs?v=2.1.0"></script>
+  <script type="module" src="./updates.mjs?v=2.1.0"></script>
 </body>
 </html>

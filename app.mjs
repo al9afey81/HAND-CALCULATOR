@@ -1,4 +1,4 @@
-import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs';
+import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.1.0';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
