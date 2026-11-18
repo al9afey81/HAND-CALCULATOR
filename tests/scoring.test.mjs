@@ -128,7 +128,12 @@ for (const config of phaseTwoModes) {
     assert.doesNotThrow(() => recordRound([], { ...regular(1), failed }, 0, config));
     assert.throws(() => recordRound([], { ...regular(2), failed }, 0, config), /الجياكر/);
     assert.doesNotThrow(() => recordRound([], { ...regular(2), jokerCount: 0, failed }, 0, config));
-    assert.throws(() => recordRound([], { ...regular(2), jokerCount: null }, 0, config), /حدّد/);
+    const unspecified = { ...regular(2), jokerCount: null };
+    assert.deepEqual(standings(recordRound([], unspecified, 0, config), config).totals,
+      scoreRound(regular(2), config));
+    assert.throws(() => recordRound([], { ...unspecified, failed }, 0, config), /حدّد/);
+    assert.throws(() => recordRound([], { ...unspecified, failed: [null, 3] }, 0, config), /حدّد/);
+    assert.doesNotThrow(() => recordRound([], { ...regular(2), failed: [null, 1] }, 0, config));
     assert.throws(() => recordRound([], { ...regular(5), failed: [null, 3] }, 0, config), /الجياكر/);
     assert.doesNotThrow(() => recordRound([], { ...regular(4), failed: [null, 4] }, 0, config));
     if (count > 2) {

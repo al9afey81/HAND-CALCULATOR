@@ -1,7 +1,7 @@
 export const TYPES = [
   { label: 'خالصة', factor: 1, jokers: 0 },
   { label: 'هند عادي', factor: 2, jokers: 0 },
-  { label: 'هند جوكر أو لون', factor: 4, jokers: null },
+  { label: 'هند جيكر أو لون', factor: 4, jokers: null },
   ...[
     [1, false, 'جوكر'], [2, false, 'جوكرين'], [3, false, 'ثلاث جواكر'],
     [1, true, 'جوكر'], [2, true, 'جوكرين'], [3, true, 'ثلاث جواكر'],
@@ -12,11 +12,15 @@ export const TYPES = [
   })),
 ];
 
-function normalizedNumber(value) {
+export function latinDigits(value) {
   const digits = '٠١٢٣٤٥٦٧٨٩';
-  return String(value ?? '').trim().replace(/[٠-٩۰-۹]/g, digit =>
+  return String(value ?? '').replace(/[٠-٩۰-۹]/g, digit =>
     String(digits.includes(digit) ? digits.indexOf(digit) : digit.charCodeAt(0) - 1776)
-  ).replace('٫', '.');
+  );
+}
+
+function normalizedNumber(value) {
+  return latinDigits(value).trim().replace('٫', '.');
 }
 
 export function cardValue(value) {
@@ -52,6 +56,10 @@ export function jokerCapacity(round) {
   if (!rule) return null;
   const jokers = rule.jokers ?? round.jokerCount;
   return rule.jokers !== null || jokers === 0 || jokers === 1 ? 3 - jokers : null;
+}
+
+export function hasLoserDeclaration({ failed, winner }) {
+  return failed?.some((value, index) => index !== winner && value != null) ?? false;
 }
 
 export function declaredJokers(round, except) {
@@ -119,10 +127,11 @@ export function recordRound(rounds, round, index = rounds.length, config) {
   }
   const updated = rounds.slice();
   const capacity = jokerCapacity(round);
-  if (capacity === null) throw new Error('حدّد هل كان الفوز بجوكر أو بلون.');
-  if (declaredJokers(round) > capacity || (capacity === 0 && round.failed?.some((value, participant) =>
-    value != null && participant !== round.winner))) {
-    throw new Error('الإعلان يتجاوز عدد الجياكر المتاحة.');
+  if (hasLoserDeclaration(round)) {
+    if (capacity === null) throw new Error('حدّد هل كان الفوز بجيكر أو بلون.');
+    if (capacity === 0 || declaredJokers(round) > capacity) {
+      throw new Error('الإعلان يتجاوز عدد الجياكر المتاحة.');
+    }
   }
   updated[index] = round;
   const downAllowed = allowsDown(index, roundLimit(updated));

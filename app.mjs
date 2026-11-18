@@ -1,15 +1,16 @@
-import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.2.1';
+import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.3.0';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
 const notice = document.querySelector('#notice');
-const number = new Intl.NumberFormat('ar', { maximumFractionDigits: 12 });
+const number = new Intl.NumberFormat('ar', { numberingSystem: 'latn', maximumFractionDigits: 12 });
 const teams = ['الفريق الأول', 'الفريق الثاني', 'الفريق الثالث'];
 const players = ['اللاعب الأول', 'اللاعب الثاني', 'اللاعب الثالث', 'اللاعب الرابع', 'اللاعب الخامس'];
 const setupOptions = {
   teams: [[2, 'فريقين'], [3, 'ثلاثة أفرقة']],
   solo: [[3, 'ثلاثة لاعبين'], [4, 'أربعة لاعبين'], [5, 'خمسة لاعبين']],
 };
+const suits = ['♠', '♣', '♥', '♦', '♠'];
 const positions = () => match.names.map((_, index) => index);
 const solo = () => match.mode === 'solo';
 const pencil = (index, round) => `<button type="button" class="pencil" data-manual="${index}"
@@ -17,7 +18,7 @@ const pencil = (index, round) => `<button type="button" class="pencil" data-manu
   aria-label="تعديل نقاط ${escape(match.names[index])}"><span aria-hidden="true">✎</span></button>`;
 const escape = value => String(value).replace(/[&<>"']/g, char =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-const display = value => `<bdi class="${value < 0 ? 'negative' : ''}">${number.format(value)}</bdi>`;
+const display = value => `<bdi class="points ${value < 0 ? 'negative' : value > 0 ? 'positive' : ''}">${number.format(value)}</bdi>`;
 const blank = () => ({ winner: null, type: null, penalty: null, down: match ? positions().map(() => []) : [], failed: [], overrides: [] });
 
 let storage;
@@ -80,18 +81,18 @@ function history(limit, totals) {
   const rows = Array.from({ length: Math.max(limit, match.rounds.length) }, (_, index) => {
     const round = match.rounds[index];
     const scores = round ? scoreRound(round, matchConfig(match), allowsDown(index, limit)).map(display) : positions().map(() => '—');
-    return `<tr class="${index === match.rounds.length || index === editing ? 'current-row' : ''}">
-      <th scope="row">${number.format(index + 1)}</th>${scores.map((score, team) => `<td>${score}${round ? pencil(team, index) : ''}</td>`).join('')}
+    return `<tr class="${round ? 'recorded-row ' : ''}${index === match.rounds.length || index === editing ? 'current-row' : ''}">
+      <th scope="row">${number.format(index + 1)}</th>${scores.map((score, team) => `<td${round ? ' class="recorded-cell"' : ''}>${round ? `<div class="recorded-score">${score}${pencil(team, index)}</div>` : score}</td>`).join('')}
     </tr>${round ? `<tr class="row-actions"><td colspan="${match.names.length + 1}">
       ${index >= limit ? '<span class="subtle">معلّقة</span>' : ''}
       <button type="button" data-edit="${index}" aria-label="تعديل اللعبة ${number.format(index + 1)}">تعديل</button>
       <button type="button" class="delete" data-delete="${index}" aria-label="حذف اللعبة ${number.format(index + 1)}">حذف</button>
     </td></tr>` : ''}`;
   }).join('');
-  return `<section class="panel" aria-labelledby="history-title">
-    <div class="panel-heading"><h2 id="history-title">سجل اللعبات</h2>
-      <button class="secondary" type="button" id="undo" ${match.rounds.length ? '' : 'disabled'}>التراجع عن آخر لعبة</button></div>
-    <table aria-labelledby="history-title"><thead><tr><th scope="col">اللعبة</th>
+  return `<section class="panel history-panel" aria-labelledby="history-title">
+    <div class="panel-heading"><h2 id="history-title"><span class="history-icon" aria-hidden="true">▤</span> سجل اللعبات</h2>
+      <button class="secondary" type="button" id="undo" ${match.rounds.length ? '' : 'disabled'}><span aria-hidden="true">↶</span> التراجع عن آخر لعبة</button></div>
+    <table class="${totals.length === 5 ? 'five-columns' : ''}" aria-labelledby="history-title"><thead><tr><th scope="col">اللعبة</th>
       ${match.names.map(name => `<th scope="col">${escape(name)}</th>`).join('')}</tr></thead>
       <tbody>${rows}</tbody><tfoot><tr><th scope="row">المجموع</th>
       ${totals.map(total => `<td>${display(total)}</td>`).join('')}</tr></tfoot></table>
@@ -105,7 +106,7 @@ function editor() {
     <form id="round-form" novalidate>
       <div class="teams">${match.names.map((name, team) => `
         <div class="team" id="team-${team}">
-          <label for="win-${team}">${escape(name)}</label>
+          <label for="win-${team}"><span class="team-suit" aria-hidden="true">${suits[team]}</span><span>${escape(name)}</span></label>
           <select id="win-${team}" data-win="${team}" aria-label="نوع الفوز · ${escape(name)}">
             <option value="">اختر نوع الفوز</option>
             ${TYPES.map(({ label }, type) => `<option value="${type}" ${draft.winner === team && draft.type === type ? 'selected' : ''}>${label}</option>`).join('')}
@@ -130,7 +131,7 @@ function renderHands(team) {
     const label = solo() ? 'نقاط الورق المتبقي' : draft.down[team].length === 1 ? 'نقاط ورق اللاعب النازل' : `نقاط ورق اللاعب ${['الأول', 'الثاني'][player]}`;
     return `<label>${label}
       <input type="text" inputmode="decimal" autocomplete="off" maxlength="16" dir="auto"
-        data-team="${team}" data-player="${player}" value="${escape(value)}" required>
+        data-team="${team}" data-player="${player}" value="${escape(latinDigits(value))}" required>
     </label>`;
   }).join('');
 }
@@ -147,21 +148,39 @@ function fitDeclarations() {
   });
 }
 
+function declarationCapacity() {
+  return jokerCapacity(draft) ?? (TYPES[draft.type]?.jokers === null ? 3 : 0);
+}
+
 function renderDeclarationOptions() {
-  const capacity = jokerCapacity(draft);
+  const capacity = declarationCapacity();
   document.querySelectorAll('[data-failed]').forEach(select => {
     const team = Number(select.dataset.failed);
     const remaining = capacity - declaredJokers(draft, team);
-    select.innerHTML = `<option value="">بدون إعلان</option>${FAILED_DECLARATIONS.map(({ label, jokers, units }, index) =>
-      jokers > remaining ? '' : `<option value="${index}">${label} (+${number.format(units * (solo() ? 100 : 200))})</option>`).join('')}`;
-    select.value = draft.failed?.[team] ?? '';
+    const selected = draft.failed?.[team];
+    select.innerHTML = `<option value="">بدون إعلان</option>${FAILED_DECLARATIONS.map(({ label, jokers, units }, index) => {
+      const unavailable = jokers > remaining;
+      if (unavailable && selected !== index) return '';
+      return `<option value="${index}" ${unavailable ? 'disabled' : ''}>${label} (+${number.format(units * (solo() ? 100 : 200))})</option>`;
+    }).join('')}`;
+    select.value = selected ?? '';
   });
 }
 
+function renderWinnerJoker() {
+  const field = document.querySelector('#winner-joker');
+  field.hidden = TYPES[draft.type]?.jokers !== null || !hasLoserDeclaration(draft);
+  field.innerHTML = field.hidden ? '' : `<label for="joker-count">الهند بـ</label>
+    <select id="joker-count">
+      <option value="">اختر جيكر أو لون</option>
+      <option value="1" ${draft.jokerCount === 1 ? 'selected' : ''}>جيكر</option>
+      <option value="0" ${draft.jokerCount === 0 ? 'selected' : ''}>لون</option>
+    </select>`;
+}
+
 function renderFields() {
-  fitDeclarations();
   const downAllowed = draftAllowsDown();
-  const showDeclarations = jokerCapacity(draft) > 0;
+  const showDeclarations = declarationCapacity() > 0;
   positions().forEach(team => {
     document.querySelector(`#team-${team}`).classList.toggle('selected', draft.winner === team);
     const fields = document.querySelector(`#fields-${team}`);
@@ -183,14 +202,7 @@ function renderFields() {
     if (downAllowed) renderHands(team);
   });
   renderDeclarationOptions();
-  const winnerJoker = document.querySelector('#winner-joker');
-  winnerJoker.hidden = TYPES[draft.type]?.jokers !== null;
-  winnerJoker.innerHTML = winnerJoker.hidden ? '' : `<label for="joker-count">الهند بـ</label>
-    <select id="joker-count">
-      <option value="">اختر جوكر أو لون</option>
-      <option value="1" ${draft.jokerCount === 1 ? 'selected' : ''}>جوكر</option>
-      <option value="0" ${draft.jokerCount === 0 ? 'selected' : ''}>لون</option>
-    </select>`;
+  renderWinnerJoker();
   const penalty = document.querySelector('#penalty');
   penalty.hidden = !draft.type;
   penalty.innerHTML = penalty.hidden ? '' : `<label for="penalty-team">الشرهة</label>
@@ -206,7 +218,7 @@ function renderManual() {
     <div class="manual-controls">
       <label for="manual-value">تعديل نقاط ${escape(match.names[manualIndex])}
         <input id="manual-value" type="text" dir="auto" autocomplete="off"
-          value="${escape(draft.overrides?.[manualIndex] ?? '')}">
+          value="${escape(latinDigits(draft.overrides?.[manualIndex]))}">
       </label>
       <button type="button" class="secondary" id="restore-score">استعادة الحسبة التلقائية</button>
     </div>`;
@@ -360,6 +372,7 @@ app.addEventListener('change', ({ target }) => {
     if (draft.type !== type) draft.jokerCount = null;
     draft.type = type;
     if (type === 0) draft.penalty = null;
+    fitDeclarations();
     document.querySelectorAll('[data-win]').forEach(select => {
       if (select !== target) select.value = '';
     });
@@ -367,8 +380,8 @@ app.addEventListener('change', ({ target }) => {
     renderFields();
   } else if (target.id === 'joker-count') {
     draft.jokerCount = target.value === '' ? null : Number(target.value);
-    renderFields();
-    document.querySelector('#joker-count').focus();
+    renderDeclarationOptions();
+    updatePreview();
   } else if ('down' in target.dataset) {
     const team = Number(target.dataset.down);
     draft.down[team] = Array.from({ length: Number(target.value) }, (_, player) => draft.down[team][player] ?? '');
@@ -377,7 +390,9 @@ app.addEventListener('change', ({ target }) => {
   } else if ('failed' in target.dataset) {
     draft.failed ??= [];
     draft.failed[target.dataset.failed] = target.value === '' ? null : Number(target.value);
+    if (!hasLoserDeclaration(draft)) draft.jokerCount = null;
     renderDeclarationOptions();
+    renderWinnerJoker();
     updatePreview();
   } else if (target.id === 'penalty-team') {
     draft.penalty = target.value === '' ? null : Number(target.value);
@@ -388,14 +403,25 @@ app.addEventListener('change', ({ target }) => {
   rememberDraft();
 });
 
+function normalizePointInput(input) {
+  const value = latinDigits(input.value);
+  if (value !== input.value) {
+    const { selectionStart, selectionEnd, selectionDirection } = input;
+    input.value = value;
+    input.setSelectionRange(selectionStart, selectionEnd, selectionDirection);
+  }
+  return value;
+}
+
 app.addEventListener('input', ({ target }) => {
   if ('player' in target.dataset) {
-    draft.down[target.dataset.team][target.dataset.player] = target.value;
+    draft.down[target.dataset.team][target.dataset.player] = normalizePointInput(target);
     updatePreview();
     rememberDraft();
   } else if (target.id === 'manual-value') {
     draft.overrides ??= [];
-    draft.overrides[manualIndex] = target.value.trim() === '' ? null : target.value;
+    const value = normalizePointInput(target);
+    draft.overrides[manualIndex] = value.trim() === '' ? null : value;
     updatePreview();
     rememberDraft();
   } else if (target.matches('#setup-form input, #rematch-form input')) {
