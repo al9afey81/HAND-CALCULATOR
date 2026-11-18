@@ -1,4 +1,4 @@
-import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.1.0';
+import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.2.0';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -247,6 +247,37 @@ function updatePreview() {
   }
 }
 
+function nameFields(labels, names) {
+  return labels.map((label, index) =>
+    `<label>${label}<input name="participant-${index}" placeholder="${label}" value="${escape(names[index] ?? '')}" maxlength="40" dir="auto" required></label>`).join('');
+}
+
+function rematchControls() {
+  const labels = (solo() ? players : teams).slice(0, match.names.length);
+  return `<div class="rematch">
+    <button class="primary" type="button" id="rematch" aria-controls="rematch-form" aria-expanded="false">إعادة المباراة</button>
+    <form id="rematch-form" aria-label="إعادة المباراة" hidden>
+      ${nameFields(labels, match.names)}
+      <div class="controls">
+        <button class="primary" type="submit">بدء المباراة</button>
+        <button class="secondary" type="button" id="cancel-rematch">إلغاء</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+function showRematch(show) {
+  const form = document.querySelector('#rematch-form');
+  const button = document.querySelector('#rematch');
+  if (!show) {
+    form.reset();
+    form.querySelectorAll('input').forEach(input => input.setCustomValidity(''));
+  }
+  form.hidden = !show;
+  button.setAttribute('aria-expanded', String(show));
+  (show ? form.querySelector('input') : button).focus();
+}
+
 function renderSetupFields() {
   const options = setupOptions[setupMode];
   const count = document.querySelector('#setup-count');
@@ -255,8 +286,7 @@ function renderSetupFields() {
   count.parentElement.hidden = !options;
   count.disabled = !options;
   const labels = setupMode === 'solo' ? players : teams;
-  document.querySelector('#setup-names').innerHTML = labels.slice(0, setupCount).map((label, index) =>
-    `<label>${label}<input name="participant-${index}" placeholder="${label}" value="${escape(setupNames[index] ?? '')}" maxlength="40" dir="auto" required></label>`).join('');
+  document.querySelector('#setup-names').innerHTML = nameFields(labels.slice(0, setupCount), setupNames);
   document.querySelector('#start-match').hidden = !setupCount;
 }
 
@@ -291,6 +321,7 @@ function render() {
     <h2 id="final-title" tabindex="-1">النتيجة النهائية</h2>
     <p>${winners.length === 1 ? 'الفائز' : 'تعادل في المركز الأول'} · ${winners.map(team => escape(match.names[team])).join('، ')}</p>
     ${cards(totals, winners)}
+    ${rematchControls()}
   </section>` : ''}
   <div class="dashboard">${!complete || editing !== null ? editor() : ''}${history(limit, totals)}</div>`;
   if (document.querySelector('#round-form')) {
@@ -366,24 +397,29 @@ app.addEventListener('input', ({ target }) => {
     draft.overrides[manualIndex] = target.value.trim() === '' ? null : target.value;
     updatePreview();
     rememberDraft();
-  } else if (target.matches('#setup-form input')) {
+  } else if (target.matches('#setup-form input, #rematch-form input')) {
     target.setCustomValidity('');
-    setupNames[Number(target.name.split('-')[1])] = target.value;
+    if (target.form.id === 'setup-form') setupNames[Number(target.name.split('-')[1])] = target.value;
   }
 });
 
 app.addEventListener('submit', event => {
   event.preventDefault();
-  if (event.target.id === 'setup-form') {
+  const rematch = event.target.id === 'rematch-form';
+  if (rematch || event.target.id === 'setup-form') {
+    if (rematch && !matchStandings().complete) return;
+    const mode = rematch ? matchConfig(match).mode : setupMode;
     const inputs = [...event.target.querySelectorAll('input')];
-    if (!setupOptions[setupMode]?.some(([count]) => count === inputs.length)) return;
+    if (!setupOptions[mode]?.some(([count]) => count === inputs.length)) return;
     const invalid = inputs.find(input => !input.value.trim());
     if (invalid) {
       invalid.setCustomValidity('أدخل الاسم.');
       invalid.reportValidity();
       return;
     }
-    persist({ mode: setupMode, names: inputs.map(input => input.value.trim()), rounds: [] });
+    persist({ mode, names: inputs.map(input => input.value.trim()), rounds: [] });
+    editing = null;
+    manualIndex = null;
     draft = blank();
     refresh('#round-title');
   } else if (event.target.id === 'round-form') {
@@ -407,7 +443,11 @@ app.addEventListener('submit', event => {
 app.addEventListener('click', ({ target }) => {
   const button = target.closest('button');
   if (!button) return;
-  if ('edit' in button.dataset || 'round' in button.dataset) {
+  if (button.id === 'rematch') {
+    showRematch(document.querySelector('#rematch-form').hidden);
+  } else if (button.id === 'cancel-rematch') {
+    showRematch(false);
+  } else if ('edit' in button.dataset || 'round' in button.dataset) {
     editing = Number(button.dataset.edit ?? button.dataset.round);
     draft = structuredClone(match.rounds[editing]);
     manualIndex = 'manual' in button.dataset ? Number(button.dataset.manual) : null;

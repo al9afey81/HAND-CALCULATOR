@@ -133,6 +133,8 @@ tfoot th, tfoot td { font-weight: 800; }
 .history-note { margin-top: 10px; }
 .final { background: #fff5dc; border-color: #e0c692; margin-bottom: 15px; }
 .final .scores { margin-top: 12px; }
+.rematch { margin-top: 12px; }
+#rematch-form { display: grid; gap: 8px; margin-top: 8px; }
 .final .score-card { border-color: #dfcea8; }
 .final .score-card h3 { color: #4d553f; }
 .final .score-card .negative { color: #146442; }
