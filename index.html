@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="calculator-version" content="2.3.1">
+  <meta name="calculator-version" content="2.4.0">
   <meta name="theme-color" content="#123e31">
   <meta name="description" content="حساب نقاط لعبة الهند للأفرقة واللعب الفردي.">
   <title>حاسبة الهند – النخبة</title>
-  <link rel="stylesheet" href="./styles.css?v=2.3.1">
+  <link rel="stylesheet" href="./styles.css?v=2.4.0">
 </head>
 <body>
   <header class="masthead">
@@ -25,9 +25,20 @@
     <button class="primary" id="apply-update" type="button">تحديث الآن</button>
   </aside>
   <main id="app" class="shell"></main>
-  <footer class="version">الإصدار <bdi>2.3.1</bdi></footer>
+  <footer class="version">الإصدار <bdi>2.4.0</bdi></footer>
   <div id="notice" role="status" aria-live="polite"></div>
-  <script type="module" src="./app.mjs?v=2.3.1"></script>
-  <script type="module" src="./updates.mjs?v=2.3.1"></script>
+  <dialog id="kabru-dialog" aria-labelledby="kabru-title">
+    <div class="kabru-screen">
+      <h1 id="kabru-title">كابروا</h1>
+      <div class="kabru-stage" role="img"><div class="kabru-wheel"></div><span class="kabru-pointer"></span></div>
+      <div id="kabru-result" role="status"></div>
+      <div class="kabru-actions">
+        <button id="kabru-spin" class="kabru-gold" type="button">كابروا</button>
+        <button id="kabru-back" class="secondary" type="button">العودة للعبة</button>
+      </div>
+    </div>
+  </dialog>
+  <script type="module" src="./app.mjs?v=2.4.0"></script>
+  <script type="module" src="./updates.mjs?v=2.4.0"></script>
 </body>
 </html>

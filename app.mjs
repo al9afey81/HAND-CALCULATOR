@@ -1,3 +1,4 @@
+import { openKabru } from './kabru.mjs?v=2.4.0';
 import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.3.1';
 
 const app = document.querySelector('#app');
@@ -208,7 +209,8 @@ function renderFields() {
   penalty.innerHTML = penalty.hidden ? '' : `<label for="penalty-team">الشرهة</label>
     <select id="penalty-team"><option value="">بدون شرهة</option>
     ${positions().filter(team => team !== draft.winner).map(team =>
-      `<option value="${team}" ${draft.penalty === team ? 'selected' : ''}>${escape(match.names[team])}</option>`).join('')}</select>`;
+      `<option value="${team}" ${draft.penalty === team ? 'selected' : ''}>${escape(match.names[team])}</option>`).join('')}</select>
+    <button type="button" class="kabru-gold" id="kabru-open" ${draft.kabruDrawn ? 'disabled' : ''}>كابروا</button>`;
   updatePreview();
 }
 
@@ -470,7 +472,19 @@ app.addEventListener('submit', event => {
 app.addEventListener('click', ({ target }) => {
   const button = target.closest('button');
   if (!button) return;
-  if (button.id === 'rematch') {
+  if (button.id === 'kabru-open') {
+    if (!draft.type || draft.kabruDrawn) return;
+    const entries = positions().filter(index => index !== draft.winner)
+      .map(index => ({ index, name: match.names[index] }));
+    openKabru(entries, index => {
+      draft.penalty = index;
+      draft.kabruDrawn = true;
+      document.querySelector('#penalty-team').value = String(index);
+      button.disabled = true;
+      updatePreview();
+      rememberDraft();
+    });
+  } else if (button.id === 'rematch') {
     showRematch(document.querySelector('#rematch-form').hidden);
   } else if (button.id === 'cancel-rematch') {
     showRematch(false);
