@@ -1,4 +1,4 @@
-import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.2.0';
+import { TYPES, FAILED_DECLARATIONS, jokerCapacity, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.2.1';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -259,7 +259,7 @@ function rematchControls() {
     <form id="rematch-form" aria-label="إعادة المباراة" hidden>
       ${nameFields(labels, match.names)}
       <div class="controls">
-        <button class="primary" type="submit">بدء المباراة</button>
+        <button class="primary" type="submit">تأكيد إعادة المباراة</button>
         <button class="secondary" type="button" id="cancel-rematch">إلغاء</button>
       </div>
     </form>
@@ -317,6 +317,7 @@ function render() {
       <span class="progress">${number.format(Math.min(match.rounds.length, limit))} من ${number.format(limit)} لعبات</span></div>
     ${cards(totals)}
   </section>
+  ${!complete ? `<section class="panel rematch-panel" aria-label="إعادة المباراة">${rematchControls()}</section>` : ''}
   ${complete ? `<section class="panel final" aria-labelledby="final-title">
     <h2 id="final-title" tabindex="-1">النتيجة النهائية</h2>
     <p>${winners.length === 1 ? 'الفائز' : 'تعادل في المركز الأول'} · ${winners.map(team => escape(match.names[team])).join('، ')}</p>
@@ -407,7 +408,7 @@ app.addEventListener('submit', event => {
   event.preventDefault();
   const rematch = event.target.id === 'rematch-form';
   if (rematch || event.target.id === 'setup-form') {
-    if (rematch && !matchStandings().complete) return;
+    if (rematch && event.target.hidden) return;
     const mode = rematch ? matchConfig(match).mode : setupMode;
     const inputs = [...event.target.querySelectorAll('input')];
     if (!setupOptions[mode]?.some(([count]) => count === inputs.length)) return;
