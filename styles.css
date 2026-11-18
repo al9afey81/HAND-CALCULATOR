@@ -60,11 +60,10 @@ h1, h2, h3, p { margin: 0; }
 .masthead h1::before { background: linear-gradient(to left, transparent, #f6ce82); }
 .masthead h1::after { background: linear-gradient(to right, transparent, #f6ce82); }
 .edition-panel {
-  /* Frame only the plaque within the supplied 1672 × 941 reference. */
   width: min(100%, 850px);
   margin-inline: auto;
   aspect-ratio: 1672 / 324;
-  background: url('./assets/elite-reference.png') center 25.77% / 100% auto no-repeat;
+  background: url('./assets/elite-reference.png?v=2.3.1') center / 100% auto no-repeat;
   mask-image: linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent);
 }
 .reset {
