@@ -1,6 +1,6 @@
-import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.5.0';
+import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.5.1';
 import { openKabru } from './kabru.mjs?v=2.4.0';
-import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.5.0';
+import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.5.1';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -236,7 +236,7 @@ function renderFields() {
   renderDeclarationOptions();
   renderWinnerJoker();
   const penalty = document.querySelector('#penalty');
-  penalty.hidden = !draft.type;
+  penalty.hidden = !draft.type || !allowsPenalty(matchConfig(match));
   penalty.innerHTML = penalty.hidden ? '' : `<label for="penalty-team">الشرهة</label>
     <select id="penalty-team"><option value="">بدون شرهة</option>
     ${positions().filter(team => team !== draft.winner).map(team =>
@@ -504,7 +504,7 @@ app.addEventListener('click', ({ target }) => {
   const button = target.closest('button');
   if (!button) return;
   if (button.id === 'kabru-open') {
-    if (!draft.type || draft.kabruDrawn) return;
+    if (!draft.type || draft.kabruDrawn || !allowsPenalty(matchConfig(match))) return;
     const entries = positions().filter(index => index !== draft.winner)
       .map(index => ({ index, name: match.names[index] }));
     openKabru(entries, index => {

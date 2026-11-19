@@ -1,4 +1,4 @@
-import { allowsDown, matchConfig, scoreRound, standings } from './scoring.mjs?v=2.5.0';
+import { allowsDown, matchConfig, scoreRound, standings } from './scoring.mjs?v=2.5.1';
 
 export const ARCHIVE_KEY = 'hind-calculator.archive.v1';
 export const RETENTION = 7 * 24 * 60 * 60 * 1000;

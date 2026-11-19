@@ -98,6 +98,7 @@ const factors = [1, 2, 4, 8, 16, 24, 12, 20, 28];
 for (const config of phaseTwoModes) {
   const { mode, count } = config;
   const seats = mode === 'solo' ? 1 : 2;
+  const hasPenalty = mode !== 'teams' || count !== 2;
   const regular = (type = 0) => round(type, null, Array.from({ length: count }, () => []));
   test(`${mode} / ${count}: جميع أنواع الفوز والنزول والشرهة`, () => {
     for (const [type, factor] of factors.entries()) {
@@ -106,7 +107,7 @@ for (const config of phaseTwoModes) {
       data.down[1] = [10];
       data.penalty = 1;
       const scores = scoreRound(data, config);
-      assert.equal(scores[1], ((seats - 1) * 100 + 10 + (type === 0 ? 0 : 25)) * factor);
+      assert.equal(scores[1], ((seats - 1) * 100 + 10 + (type !== 0 && hasPenalty ? 25 : 0)) * factor);
       assert.equal(scores[0], -30 * factor);
       assert.ok(scores.slice(2).every(score => score === 100 * seats * factor));
     }
@@ -118,7 +119,7 @@ for (const config of phaseTwoModes) {
       data.down[1] = Array(seats).fill(10);
       const scores = scoreRound(data, config);
       assert.equal(scores[0], -60);
-      assert.equal(scores[1], 20 * seats + 50 + units * 100 * seats);
+      assert.equal(scores[1], 20 * seats + (hasPenalty ? 50 : 0) + units * 100 * seats);
       assert.ok(scores.slice(2).every(score => score === 200 * seats));
     }
   });
@@ -188,3 +189,15 @@ for (const config of phaseTwoModes) {
     assert.deepEqual(loadMatch(storage), match);
   });
 }
+
+
+test('تجاهل شرهة كابروا المحفوظة في مباراة فريقين مع الحفاظ على بيانات الجولة', () => {
+  const savedRound = { ...round(1, 1, [[], []]), kabruDrawn: true };
+  const match = { mode: 'teams', names: ['اسم 1', 'اسم 2'], rounds: [savedRound] };
+  const entries = new Map();
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value) };
+  saveMatch(storage, match);
+  assert.deepEqual(loadMatch(storage), match);
+  assert.deepEqual(JSON.parse(entries.get(STORAGE_KEY)).totals, [-60, 400]);
+  assert.deepEqual(scoreRound({ ...savedRound, overrides: [null, 450] }, { mode: 'teams', count: 2 }), [-60, 450]);
+});

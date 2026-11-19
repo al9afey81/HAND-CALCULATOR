@@ -81,8 +81,13 @@ function participants({ mode = 'teams', count = 3 } = {}) {
   return Array.from({ length: count }, (_, index) => index);
 }
 
+export function allowsPenalty({ mode = 'teams', count = 3 } = {}) {
+  return mode !== 'teams' || count !== 2;
+}
+
 export function scoreRound(round, config, downAllowed = true) {
-  const { winner, type, penalty = null, failed = [], overrides = [] } = round;
+  const { winner, type, failed = [], overrides = [] } = round;
+  const penalty = allowsPenalty(config) ? round.penalty ?? null : null;
   const positions = participants(config);
   const seats = config?.mode === 'solo' ? 1 : 2;
   const down = round.down ?? positions.map(() => []);
