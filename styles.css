@@ -469,3 +469,115 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 #archive-content th small { display: block; font-size: 9px; }
 .archive-delete { margin-top: 6px; padding-top: 7px; border-top: 1px solid #ddd7c2; }
 .archive-delete p { margin-bottom: 4px; }
+
+#victory-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(calc(100% - 24px), 680px);
+  max-width: none;
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 12px 8px;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: #ffebae;
+}
+#victory-dialog::backdrop {
+  background: rgb(0 19 13 / 78%);
+  animation: victory-backdrop-in 750ms ease both,
+    victory-backdrop-out var(--victory-fade-time) var(--victory-visible-time) ease forwards;
+}
+.victory-cloud {
+  position: relative;
+  isolation: isolate;
+  margin: 15% 2% 4%;
+  animation: victory-cloud-in 900ms cubic-bezier(.2, .8, .3, 1) both,
+    victory-cloud-out var(--victory-fade-time) var(--victory-visible-time) ease-in-out forwards;
+}
+.victory-lobes {
+  position: absolute;
+  inset: -31% 8% 42%;
+  z-index: -1;
+  pointer-events: none;
+}
+.victory-lobes i {
+  position: absolute;
+  width: 38%;
+  height: 100%;
+  border: 3px solid #f5cb77;
+  border-radius: 50%;
+  background: linear-gradient(#17634b, #07513a 65%);
+  box-shadow: inset 0 0 0 2px #875710, 0 -7px 22px #d7a74b31;
+}
+.victory-lobes i:nth-child(1) { inset-inline-start: 0; top: 23%; }
+.victory-lobes i:nth-child(2) { inset-inline-start: 31%; top: 0; }
+.victory-lobes i:nth-child(3) { inset-inline-end: 0; top: 23%; }
+.victory-message {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: clamp(25px, 6vw, 55px) clamp(16px, 5vw, 54px);
+  text-align: center;
+  border: 3px solid #f5cb77;
+  border-radius: 28% 28% 25% 25% / 46% 46% 44% 44%;
+  background: radial-gradient(ellipse at 50% 0%, #268169, #08523b 43%, #032b20 85%);
+  box-shadow: inset 0 0 0 2px #986219, inset 0 0 0 5px #e9b95465,
+    0 14px 48px #00120db3, 0 0 28px #d6a64c4d;
+}
+.victory-trophy {
+  font-size: clamp(46px, 13vw, 94px);
+  line-height: 1;
+  filter: drop-shadow(0 4px 10px #f4c56876);
+}
+.victory-message h2 {
+  max-width: 100%;
+  font-size: clamp(23px, 6.7vw, 49px);
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 4px #001b12;
+  outline: none;
+}
+.victory-confetti {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.victory-confetti i {
+  position: absolute;
+  top: -18px;
+  left: var(--x);
+  width: 7px;
+  height: 13px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, #fff0b4, #d29933);
+  animation: victory-fall var(--fall) var(--delay) linear both;
+}
+.victory-confetti i:nth-child(3n) { width: 9px; height: 9px; border-radius: 50%; }
+@keyframes victory-cloud-in {
+  from { opacity: 0; transform: translateY(16px) scale(.72); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes victory-cloud-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-8px) scale(1.025); }
+}
+@keyframes victory-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes victory-backdrop-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes victory-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0); }
+  10%, 76% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--drift), 103dvh) rotate(var(--turn)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #victory-dialog::backdrop, .victory-cloud { animation: none; }
+}

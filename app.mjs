@@ -1,6 +1,6 @@
-import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.5.2';
+import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.6.0';
 import { openKabru } from './kabru.mjs?v=2.4.0';
-import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.5.2';
+import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.6.0';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -382,6 +382,42 @@ function refresh(focus) {
   (document.querySelector(focus) ?? document.querySelector('#score-title'))?.focus();
 }
 
+function celebrate(winners) {
+  const dialog = document.querySelector('#victory-dialog');
+  const final = document.querySelector('.final');
+  const title = dialog.querySelector('#victory-title');
+  const confetti = dialog.querySelector('.victory-confetti');
+  const names = winners.map(index => match.names[index]).join('، ');
+  const winnerNames = document.createElement('bdi');
+  winnerNames.textContent = names;
+  title.replaceChildren('مبروك يا ', winnerNames);
+
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    confetti.replaceChildren(...Array.from({ length: 28 }, (_, index) => {
+      const piece = document.createElement('i');
+      piece.style.setProperty('--x', `${4 + (index * 29) % 93}%`);
+      piece.style.setProperty('--drift', `${(index * 13) % 120 - 60}px`);
+      piece.style.setProperty('--delay', `${(index * 137) % 1250}ms`);
+      piece.style.setProperty('--fall', `${2100 + (index * 173) % 1000}ms`);
+      piece.style.setProperty('--turn', `${index % 2 ? 390 : -320}deg`);
+      return piece;
+    }));
+  }
+  const visibleTime = 10000;
+  const fadeTime = 800;
+  dialog.style.setProperty('--victory-visible-time', `${visibleTime}ms`);
+  dialog.style.setProperty('--victory-fade-time', `${fadeTime}ms`);
+  dialog.showModal();
+  final.hidden = true;
+  const timer = setTimeout(() => dialog.close(), visibleTime + fadeTime);
+  dialog.addEventListener('close', () => {
+    clearTimeout(timer);
+    confetti.replaceChildren();
+    final.hidden = false;
+    final.querySelector('h2').focus();
+  }, { once: true });
+}
+
 app.addEventListener('change', ({ target }) => {
   if (target.id === 'setup-mode' || target.id === 'setup-count') {
     if (target.id === 'setup-mode') {
@@ -486,13 +522,20 @@ app.addEventListener('submit', event => {
   } else if (event.target.id === 'round-form') {
     try {
       const rounds = withDraft();
+      const { complete, winners } = matchStandings(rounds);
+      const firstFinish = complete && editing === null && match.endedAt == null;
       const saved = persist({ ...match, rounds, redo: [], pending: undefined });
       const message = editing === null ? 'تم اعتماد اللعبة.' : 'تم حفظ التعديل.';
       editing = null;
       manualIndex = null;
       draft = blank();
-      refresh(matchStandings(rounds).complete ? '#final-title' : '#round-title');
-      if (saved) announce(message);
+      if (firstFinish) {
+        render();
+        celebrate(winners);
+      } else {
+        refresh(complete ? '#final-title' : '#round-title');
+      }
+      if (saved && !firstFinish) announce(message);
     } catch (problem) {
       const error = document.querySelector('#round-error');
       error.textContent = problem.message;
