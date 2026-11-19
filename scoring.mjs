@@ -71,6 +71,11 @@ export function roundLimit(rounds) {
   return rounds.some(round => TYPES[round.type]?.factor >= 4) ? 7 : 5;
 }
 
+export function allowsKhalasa(rounds, index) {
+  const limit = roundLimit(rounds.filter((_, position) => position !== index));
+  return index !== limit - 1;
+}
+
 export function allowsDown(index, limit) {
   return index !== limit - 1;
 }
@@ -129,6 +134,9 @@ export function recordRound(rounds, round, index = rounds.length, config) {
   if (!Number.isInteger(index) || index < 0 || index > rounds.length
       || (index === rounds.length && standings(rounds, config).complete)) {
     throw new Error('لا يمكن إضافة هذه اللعبة.');
+  }
+  if (round.type === 0 && !allowsKhalasa(rounds, index)) {
+    throw new Error('لا يمكن اعتماد الخالصة في اللعبة الأخيرة.');
   }
   const updated = rounds.slice();
   const capacity = jokerCapacity(round);

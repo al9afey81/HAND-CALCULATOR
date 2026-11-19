@@ -45,7 +45,7 @@ test('تمديد المباراة في اللعبة الخامسة لكل نوع
     let rounds = recordRound(firstFour, round(type));
     assert.equal(standings(rounds).limit, 7);
     assert.equal(standings(rounds).complete, false);
-    rounds = recordRound(recordRound(rounds, round(type)), round());
+    rounds = recordRound(recordRound(rounds, round(type)), round(1));
     assert.equal(standings(rounds).complete, true);
     assert.throws(() => recordRound(rounds, round(type)));
   }
@@ -159,9 +159,21 @@ for (const config of phaseTwoModes) {
     const seventh = recordRound(sixth, downRound, 6, config);
     assert.deepEqual(seventh[6].down[1], []);
     assert.equal(standings([...sixth, downRound], config).totals[1], standings(seventh, config).totals[1]);
-    const shortened = recordRound(seventh, regular(), 4, config);
+    const shortened = recordRound(seventh, regular(1), 4, config);
     assert.equal(standings(shortened, config).limit, 5);
-    assert.equal(standings(shortened, config).totals[1], 500 * seats);
+    assert.equal(standings(shortened, config).totals[1], 600 * seats);
+  });
+
+  test(`${mode} / ${count}: الخالصة مسموحة قبل اللعبة الأخيرة فقط`, () => {
+    const firstFour = Array.from({ length: 4 }, () => regular());
+    assert.throws(() => recordRound(firstFour, regular(), 4, config), /الخالصة في اللعبة الأخيرة/);
+    const extended = [regular(2), ...firstFour.slice(1)];
+    const fifth = recordRound(extended, regular(), 4, config);
+    const sixth = recordRound(fifth, regular(), 5, config);
+    assert.throws(() => recordRound(sixth, regular(), 6, config), /الخالصة في اللعبة الأخيرة/);
+    const extensionAtFive = recordRound(firstFour, regular(2), 4, config);
+    assert.throws(() => recordRound(extensionAtFive, regular(), 4, config), /الخالصة في اللعبة الأخيرة/);
+    assert.doesNotThrow(() => standings([...firstFour, regular()], config));
   });
 
   test(`${mode} / ${count}: حد اللعبات والحفظ واستبدال النقاط`, () => {
@@ -172,7 +184,7 @@ for (const config of phaseTwoModes) {
       const extended = recordRound(firstFour, regular(type), 4, config);
       assert.equal(standings(extended, config).limit, 7);
       const six = recordRound(extended, regular(), 5, config);
-      const seven = recordRound(six, regular(), 6, config);
+      const seven = recordRound(six, regular(1), 6, config);
       assert.equal(standings(seven, config).complete, true);
       assert.throws(() => recordRound(seven, regular(), 7, config));
     }

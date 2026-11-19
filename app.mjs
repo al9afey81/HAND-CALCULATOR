@@ -1,6 +1,6 @@
-import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.5.1';
+import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.5.2';
 import { openKabru } from './kabru.mjs?v=2.4.0';
-import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.5.1';
+import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.5.2';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -133,6 +133,7 @@ function history(limit, totals) {
 }
 
 function editor() {
+  const showKhalasa = allowsKhalasa(match.rounds, editing ?? match.rounds.length);
   return `<section class="panel" aria-labelledby="round-title">
     <div class="panel-heading"><h2 id="round-title" tabindex="-1">${editing === null ? 'تسجيل اللعبة' : 'تعديل اللعبة'} ${number.format((editing ?? match.rounds.length) + 1)}</h2></div>
     <form id="round-form" novalidate>
@@ -141,7 +142,7 @@ function editor() {
           <label for="win-${team}"><span class="team-suit" aria-hidden="true">${suits[team]}</span><span>${escape(name)}</span></label>
           <select id="win-${team}" data-win="${team}" aria-label="نوع الفوز · ${escape(name)}">
             <option value="">اختر نوع الفوز</option>
-            ${TYPES.map(({ label }, type) => `<option value="${type}" ${draft.winner === team && draft.type === type ? 'selected' : ''}>${label}</option>`).join('')}
+            ${TYPES.map(({ label }, type) => type === 0 && !showKhalasa ? '' : `<option value="${type}" ${draft.winner === team && draft.type === type ? 'selected' : ''}>${label}</option>`).join('')}
           </select>
           <div class="team-fields" id="fields-${team}"></div>
         </div>`).join('')}</div>
