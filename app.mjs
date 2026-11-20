@@ -1,7 +1,7 @@
-import { configured, createLive, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.2';
+import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.5';
 import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.8.2';
-import { openKabru } from './kabru.mjs?v=2.4.0';
-import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.2';
+import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.5';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -56,6 +56,7 @@ let noticeTimer;
 let sharedId;
 let liveBusy = false;
 let liveMessage = '';
+let liveKabru;
 let publishVersion = 0;
 
 function restoreSharing() {
@@ -92,7 +93,7 @@ function syncSharing() {
   const id = sharedId;
   liveMessage = 'جارٍ مزامنة القيد…';
   renderSharing();
-  publishLive(id, JSON.stringify(liveSnapshot(match))).then(() => {
+  publishLive(id, JSON.stringify(liveSnapshot(match, liveKabru))).then(() => {
     if (version !== publishVersion || sharedId !== id || liveBusy) return;
     liveMessage = 'المشاركة المباشرة مفعّلة.';
     renderSharing();
@@ -226,11 +227,50 @@ function withDraft() {
   return recordRound(match.rounds, draft, editing ?? match.rounds.length, matchConfig(match));
 }
 
-function cards(totals, winners = []) {
-  return `<div class="scores ${totals.length === 5 ? 'five-scores' : ''}" style="--participants: ${totals.length}">${totals.map((total, team) => `
-    <div class="score-card ${winners.includes(team) ? 'leading' : ''}">
-      <h3>${escape(match.names[team])}</h3><b>${display(total)}</b>
-    </div>`).join('')}</div>`;
+function recommendations(totals, gaps) {
+  if (!gaps) return '';
+  const leader = totals.indexOf(Math.min(...totals));
+  let namedLeader = false;
+  return gaps.map((entry, team) => {
+    if (entry.gap === 0) return '';
+    let advice;
+    let chase = '';
+    if (entry.out) {
+      advice = 'الانسحاب طيب 😂';
+    } else if (entry.type === undefined) {
+      advice = 'لا يكفي فوز واحد بالنقاط لتجاوز المتصدر';
+    } else {
+      const penalty = entry.penalty === undefined ? '' : ` وعط الشرهة لـ${match.names[entry.penalty]}`;
+      if (!entry.table && !namedLeader) chase = `وتصيد ${match.names[leader]}`;
+      advice = `${entry.table ? 'تبي تلعب؟' : 'يبيلك'} ${TYPES[entry.type].label}${penalty}${entry.table ? ' 😏' : ''}`;
+      if (!entry.table) namedLeader = true;
+    }
+    const chaseText = chase ? ` <span class="score-advice-chase">${escape(chase)}</span>` : '';
+    return `<div>${escape(match.names[team])}: ${escape(advice)}${chaseText}</div>`;
+  }).join('');
+}
+
+function cards(totals, winners = [], ranked = false) {
+  const labels = ['المتصدر', 'الثاني', 'الخباص'];
+  return `<div class="scores ${totals.length === 5 ? 'five-scores' : ''} ${ranked ? 'scores-ranked' : ''}" style="--participants: ${totals.length}">${totals.map((total, team) => {
+    const rank = ranked ? totals.filter(points => points < total).length : -1;
+    return `
+    <div class="score-card ${winners.includes(team) || rank === 0 ? 'leading' : ''}">
+      <h3>${escape(match.names[team])}</h3>
+      ${ranked ? `<span class="score-rank">${labels[rank]}</span>` : ''}
+      <b>${display(total)}</b>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function scoreHeader(totals, played, limit, gaps, owner = false) {
+  const advice = recommendations(totals, gaps);
+  const progress = `<span class="progress">${number.format(Math.min(played, limit))} من ${number.format(limit)} لعبات</span>`;
+  return `<div class="score-title ${advice ? 'score-title-with-advice' : ''}">
+    <h2 id="score-title"${owner ? ' tabindex="-1"' : ''}>مجموع النقاط</h2>
+    ${progress}
+    <div class="score-advice" title="محاكاة دون نزول أو إعلان فاشل" ${advice ? '' : 'hidden'}>${advice}</div>
+  </div>`;
 }
 
 function resultsTable(names, totals, rows, title) {
@@ -400,7 +440,18 @@ function updatePreview() {
   error.hidden = true;
   approve.disabled = true;
   title.textContent = 'مجموع النقاط';
-  scoreboard.querySelector('.scores').outerHTML = cards(matchStandings().totals);
+  const config = matchConfig(match);
+  const current = matchStandings();
+  const ranked = config.mode === 'teams' && config.count === 3;
+  const updateBoard = (totals, gaps) => {
+    const advice = recommendations(totals, gaps);
+    const notes = scoreboard.querySelector('.score-advice');
+    notes.innerHTML = advice;
+    notes.hidden = !advice;
+    notes.parentElement.classList.toggle('score-title-with-advice', Boolean(advice));
+    scoreboard.querySelector('.scores').outerHTML = cards(totals, [], ranked);
+  };
+  updateBoard(current.totals, scoreGaps(match.rounds, config, current));
   if (draft.winner === null) {
     preview.innerHTML = '<p class="subtle">اختر نوع الفوز تحت اسم الفائز لمعاينة النقاط.</p>';
     return;
@@ -419,7 +470,7 @@ function updatePreview() {
       `<div>${escape(match.names[team])}<b>${display(score)}</b>${pencil(team)}</div>`).join('')}</div>`;
     if (editing !== null || draft.overrides?.some(value => value != null)) {
       title.textContent = 'مجموع النقاط المتوقع';
-      scoreboard.querySelector('.scores').outerHTML = cards(projected.totals);
+      updateBoard(projected.totals, scoreGaps(rounds, config, projected));
     }
     const field = document.querySelector('#manual-value');
     if (field) field.placeholder = number.format(scores[manualIndex]);
@@ -509,11 +560,11 @@ function render() {
     renderSetupFields();
     return;
   }
-  const { limit, totals, complete, winners, reason } = matchStandings();
+  const current = matchStandings();
+  const { limit, totals, complete, winners, reason } = current;
   app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">
-    <div class="score-title"><h2 id="score-title" tabindex="-1">مجموع النقاط</h2>
-      <span class="progress">${number.format(Math.min(match.rounds.length, limit))} من ${number.format(limit)} لعبات</span></div>
-    ${cards(totals)}
+    ${scoreHeader(totals, match.rounds.length, limit, scoreGaps(match.rounds, matchConfig(match), current), true)}
+    ${cards(totals, [], matchConfig(match).mode === 'teams' && totals.length === 3)}
   </section>
   ${!complete ? `<section class="panel rematch-panel" aria-label="إعادة المباراة">${rematchControls()}</section>` : ''}
   ${complete ? `<section class="panel final" aria-labelledby="final-title">
@@ -730,7 +781,10 @@ app.addEventListener('click', ({ target }) => {
       button.disabled = true;
       updatePreview();
       rememberDraft();
-    });
+    }, (sharedId || liveBusy) ? draw => {
+      liveKabru = draw;
+      syncSharing();
+    } : undefined, liveNow);
   } else if (button.id === 'rematch') {
     showRematch(document.querySelector('#rematch-form').hidden);
   } else if (button.id === 'cancel-rematch') {
@@ -877,6 +931,7 @@ function renderLiveMatch(snapshot) {
   const celebrateNow = snapshot?.complete && (!match?.complete || (snapshot.reason === 'hind-zat'
     && (match.reason !== snapshot.reason || match.winners[0] !== snapshot.winners[0])));
   match = snapshot;
+  renderWatchedKabru(snapshot?.kabru, snapshot?.names, liveNow);
   if (!snapshot) {
     if (victory.open) victory.close();
     app.innerHTML = '';
@@ -888,9 +943,8 @@ function renderLiveMatch(snapshot) {
     `<tr><th scope="row">${number.format(index + 1)}${reason === 'hind-zat' && index === limit - 1 ? ' <small>هند زات</small>' : ''}${index >= limit ? ' <small class="subtle">معلّقة</small>' : ''}</th>
       ${names.map((_, position) => `<td>${scores[index] ? display(scores[index][position]) : '—'}</td>`).join('')}</tr>`).join('');
   app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">
-    <div class="score-title"><h2 id="score-title">مجموع النقاط</h2>
-      <span class="progress">${number.format(Math.min(scores.length, limit))} من ${number.format(limit)} لعبات</span></div>
-    ${cards(totals)}
+    ${scoreHeader(totals, scores.length, limit, snapshot.gaps)}
+    ${cards(totals, [], snapshot.mode === 'teams' && totals.length === 3)}
   </section>
   ${complete ? `<section class="panel final" aria-labelledby="final-title" ${victory.open ? 'hidden' : ''}>
     <h2 id="final-title" tabindex="-1">النتيجة النهائية</h2>

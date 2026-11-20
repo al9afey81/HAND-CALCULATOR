@@ -148,6 +148,29 @@ body > #live-panel .subtle { color: inherit; }
 .score-card h3 { font-size: clamp(11px, 1.65vw, 21px); color: #f7ebd2; }
 .points { font-weight: 800; font-variant-numeric: tabular-nums; }
 .score-card b { font-size: clamp(23px, 5vw, 42px); line-height: 1.25; color: var(--gold); }
+.score-title-with-advice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 3fr) minmax(0, 1fr);
+  grid-template-areas: "title advice progress";
+  align-items: center;
+}
+.score-title-with-advice h2 { grid-area: title; }
+.score-title-with-advice .progress { grid-area: progress; justify-self: end; text-align: center; }
+.score-advice {
+  grid-area: advice;
+  align-self: center;
+  direction: rtl;
+  text-align: right;
+  color: #f4d799;
+  font-size: clamp(15px, 1.85vw, 24px);
+  font-weight: 800;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.score-advice-chase { display: inline-block; max-width: 100%; }
+.scores-ranked .score-card { display: flex; flex-direction: column; align-items: center; padding-block: 5px; }
+.scores-ranked .score-card b { margin-top: auto; font-size: clamp(19px, 4.3vw, 36px); }
+.score-rank { color: #f4d799; font-size: clamp(10px, 1.15vw, 15px); line-height: 1.35; }
 .score-card .positive { color: var(--gold); }
 .score-card .negative { color: #a4ed73; }
 .score-card.leading { border-color: var(--gold); }
@@ -389,7 +412,13 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
   padding: max(20px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
 }
 .kabru-screen h1 { color: var(--gold); font-size: clamp(28px, 8vw, 52px); }
-.kabru-stage { position: relative; width: min(82vw, 54dvh, 450px); aspect-ratio: 1; }
+.kabru-stage {
+  position: relative;
+  width: min(82vw, 54vh, 450px);
+  width: min(82vw, 54dvh, 450px);
+  height: min(82vw, 54vh, 450px);
+  height: min(82vw, 54dvh, 450px);
+}
 .kabru-wheel {
   direction: ltr;
   transform: rotate(var(--rotation, 0deg));

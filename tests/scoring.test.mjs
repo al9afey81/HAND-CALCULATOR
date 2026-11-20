@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cardValue, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
+import { cardValue, scoreGaps, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
 
 function round(type = 0, penalty = null, down = [[], [], []], winner = 0) {
   return { type, penalty, down, winner, ...(type === 2 ? { jokerCount: 1 } : {}) };
@@ -232,4 +232,40 @@ test('two-team games can cap winning and losing declarations at two jokers', () 
   assert.throws(() => recordRound([], combined, 0, two));
   assert.doesNotThrow(() => recordRound([], combined, 0, three));
   assert.doesNotThrow(() => recordRound([], { ...round(1, null, hands), failed: [null, 5] }, 0, two));
+});
+
+test('three-team gaps choose the lowest scoring win including a necessary penalty', () => {
+  const config = { mode: 'teams', count: 3 };
+  const zero = { ...round(1), overrides: [0, 0, 0] };
+  const rounds = [zero, { ...round(1), overrides: [0, 490, 700] }];
+  assert.equal(scoreGaps(rounds.slice(1), config), undefined);
+  assert.deepEqual(scoreGaps(rounds, config), [
+    { gap: 0 }, { gap: 490, type: 1, penalty: 0 }, { gap: 700, type: 2 },
+  ]);
+  assert.deepEqual(scoreGaps([zero, { ...round(1), overrides: [0, 460, 10] }], config)[1],
+    { gap: 460, type: 1, penalty: 0 });
+  assert.equal(scoreGaps(rounds, { mode: 'solo', count: 3 }), undefined);
+});
+
+test('gaps respect the last round, tied leaders, and the end of the match', () => {
+  const config = { mode: 'teams', count: 3 };
+  const tied = { ...round(1), overrides: [0, 0, 0] };
+  const rounds = [tied, tied, tied, { ...tied, overrides: [0, 0, 100] }];
+  assert.deepEqual(scoreGaps(rounds, config), [{ gap: 0 }, { gap: 0 }, { gap: 100, type: 1 }]);
+  assert.equal(scoreGaps([...rounds, tied], config), undefined);
+  assert.deepEqual(scoreGaps(removeRound(rounds, 0), config)[2], { gap: 100, type: 0 });
+});
+
+test('last-round advice prioritizes the lead, then second place, then elimination', () => {
+  const config = { mode: 'teams', count: 3 };
+  for (const limit of [5, 7]) {
+    const zero = { ...round(limit === 5 ? 1 : 2), overrides: [0, 0, 0] };
+    const forecast = totals => scoreGaps([
+      ...Array(limit - 2).fill(zero), { ...round(1), overrides: totals },
+    ], config);
+    assert.deepEqual(forecast([0, 490, 700])[2], { gap: 700, type: 2 });
+    assert.deepEqual(forecast([0, 10000, 10490])[2], { gap: 10490, type: 1, penalty: 1, table: true });
+    assert.deepEqual(forecast([0, 10000, 30000])[2], { gap: 30000, out: true });
+    assert.equal(forecast([0, 10000, 30000])[1].out, undefined);
+  }
 });

@@ -61,3 +61,36 @@ test('Hind Zat ends every mode immediately and survives the live snapshot', () =
     assert.equal(liveSnapshot({ ...match, rounds: match.rounds.slice(0, 1) }).complete, false);
   }
 });
+
+test('live Kabru carries the owner draw without changing the scores', () => {
+  const match = { mode: 'teams', names: ['أ', 'ب', 'ج'], rounds: [round(3)] };
+  const scores = liveSnapshot(match);
+  const ready = { id: 'a'.repeat(36), positions: [1, 2] };
+  const spin = { ...ready, chosen: 1, duration: 4200, startsAt: 1700000000000 };
+  const decode = kabru => decodeLiveSnapshot(JSON.stringify({ ...scores, kabru }));
+  for (const draw of [ready, spin]) {
+    assert.deepEqual(liveSnapshot(match, draw), { ...scores, kabru: draw });
+    assert.deepEqual(decode(draw), { ...scores, kabru: draw });
+  }
+  assert.deepEqual(decode(undefined), scores);
+  for (const invalid of [
+    { ...ready, positions: [1, 1] }, { ...ready, positions: [3] },
+    { ...ready, chosen: 0 }, { ...spin, chosen: 2 },
+    { ...spin, startsAt: -1 }, { ...spin, duration: 0 },
+  ]) assert.throws(() => decode(invalid), /Invalid live Kabru draw/);
+});
+
+test('score gaps reach viewers with existing and current snapshots supported', () => {
+  const match = { mode: 'teams', names: ['أ', 'ب', 'ج'], rounds: [
+    { ...round(3), overrides: [0, 0, 0] },
+    { ...round(3), overrides: [0, 490, 700] },
+  ] };
+  const snapshot = liveSnapshot(match);
+  assert.deepEqual(decodeLiveSnapshot(JSON.stringify(snapshot)).gaps,
+    [{ gap: 0 }, { gap: 490, type: 1, penalty: 0 }, { gap: 700, type: 2 }]);
+  for (const gaps of [undefined, [{ gap: 1 }], [{ gap: 0 }, { gap: 490, type: 1, penalty: 1 }, { gap: 700 }]]) {
+    const decoded = decodeLiveSnapshot(JSON.stringify({ ...snapshot, gaps }));
+    assert.equal(decoded.gaps, undefined);
+    assert.deepEqual(decoded.totals, snapshot.totals);
+  }
+});

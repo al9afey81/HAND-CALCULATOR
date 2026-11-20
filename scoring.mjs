@@ -177,6 +177,47 @@ export function recordRound(rounds, round, index = rounds.length, config) {
   return updated;
 }
 
+// Compare a fully scored next round with every opponent. Unentered down cards
+// and failed declarations are omitted from the forecast.
+export function scoreGaps(rounds, config, current = standings(rounds, config)) {
+  if (config.mode !== 'teams' || config.count !== 3 || current.complete || rounds.length < 2) return;
+  const { totals } = current;
+  const leaderTotal = Math.min(...totals);
+  const positions = [0, 1, 2];
+  const lastRound = rounds.length === current.limit - 1;
+  const types = TYPES.map((rule, type) => ({ ...rule, type }))
+    .filter(({ type }) => type !== HIND_ZAT && (type !== 0 || allowsKhalasa(rounds, rounds.length)))
+    .sort((a, b) => a.factor - b.factor);
+
+  return totals.map((total, winner) => {
+    const gap = Math.min(Number.MAX_VALUE, total - leaderTotal);
+    if (gap === 0) return { gap };
+
+    const opponents = positions.filter(index => index !== winner)
+      .sort((a, b) => totals[a] - totals[b]);
+    const canStay = lastRound && opponents.every(index => totals[index] < total)
+      && totals[opponents[0]] < totals[opponents[1]];
+    let tableWin;
+    for (const { type, factor } of types) {
+      for (const penalty of factor > 1 ? [null, ...opponents] : [null]) {
+        const round = { winner, type, penalty, ...(type === 2 ? { jokerCount: 0 } : {}) };
+        try {
+          const next = standings(recordRound(rounds, round, rounds.length, config), config);
+          const outcome = { gap, type, ...(penalty === null ? {} : { penalty }) };
+          if (opponents.every(index => next.totals[winner] < next.totals[index])) return outcome;
+          if (canStay && next.totals[winner] < next.totals[opponents[1]]) {
+            tableWin ??= { ...outcome, table: true };
+          }
+        } catch (error) {
+          // A hypothetical score can overflow when existing totals include very large manual adjustments.
+          if (error.message !== 'مجموع النقاط كبير جداً.') throw error;
+        }
+      }
+    }
+    return tableWin ?? { gap, ...(canStay ? { out: true } : {}) };
+  });
+}
+
 export function removeRound(rounds, index = rounds.length - 1) {
   return rounds.filter((_, position) => position !== index);
 }
