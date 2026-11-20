@@ -1,4 +1,4 @@
-import { allowsDown, matchConfig, scoreRound, standings } from './scoring.mjs?v=2.6.0';
+import { allowsDown, matchConfig, roundLimit, scoreRound, standings } from './scoring.mjs?v=2.8.2';
 
 export const ARCHIVE_KEY = 'hind-calculator.archive.v1';
 export const RETENTION = 7 * 24 * 60 * 60 * 1000;
@@ -18,7 +18,7 @@ export function writeArchive(storage, entries) {
 
 export function archiveMatch(entries, match, now = Date.now()) {
   const config = matchConfig(match);
-  const { limit, totals, complete, winners } = standings(match.rounds, config);
+  const { limit, totals, complete, winners, reason } = standings(match.rounds, config);
   if (!complete) return { entries, match };
   const previous = entries.find(entry => entry.id === match.id);
   if (!previous && match.endedAt != null) return { entries, match };
@@ -29,8 +29,8 @@ export function archiveMatch(entries, match, now = Date.now()) {
     mode: config.mode,
     names: match.names.slice(),
     rounds: structuredClone(match.rounds),
-    scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, limit))),
-    limit, totals, winners,
+    scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, roundLimit(match.rounds)))),
+    limit, totals, winners, ...(reason ? { reason } : {}),
   };
   return {
     entries: [entry, ...entries.filter(item => item.id !== match.id)],

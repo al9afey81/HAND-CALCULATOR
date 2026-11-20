@@ -1,9 +1,21 @@
-import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.6.0';
+import { configured, createLive, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.2';
+import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.8.2';
 import { openKabru } from './kabru.mjs?v=2.4.0';
-import { latinDigits, TYPES, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.6.0';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.2';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
+const viewId = new URLSearchParams(location.hash.slice(1)).get('live');
+const watching = viewId !== null;
+const livePanel = document.querySelector('#live-panel');
+const liveStatus = document.querySelector('#live-status');
+const liveLink = document.querySelector('#live-link');
+const liveStart = document.querySelector('#live-start');
+const liveWhatsApp = document.querySelector('#live-whatsapp');
+const liveRename = document.querySelector('#live-rename');
+const liveNamesDialog = document.querySelector('#live-names-dialog');
+const liveStop = document.querySelector('#live-stop');
+const liveKey = 'hind-calculator.live.';
 const notice = document.querySelector('#notice');
 const archiveDialog = document.querySelector('#archive-dialog');
 const archiveButton = document.querySelector('#archive-open');
@@ -33,7 +45,7 @@ const blank = () => ({ winner: null, type: null, penalty: null, down: match ? po
 
 let storage;
 try { storage = window.localStorage; } catch {}
-let match = loadMatch(storage);
+let match = watching ? null : loadMatch(storage);
 let editing = match?.pending?.editing ?? null;
 let draft = match?.pending?.draft ?? blank();
 let manualIndex = match?.pending?.manualIndex ?? null;
@@ -41,6 +53,125 @@ let setupMode = '';
 let setupCount = 0;
 let setupNames = [];
 let noticeTimer;
+let sharedId;
+let liveBusy = false;
+let liveMessage = '';
+let publishVersion = 0;
+
+function restoreSharing() {
+  try {
+    const id = storage?.getItem(liveKey + match?.id);
+    if (validLiveId(id)) sharedId = id;
+  } catch {}
+}
+
+function renderSharing() {
+  livePanel.hidden = !watching && (!match || (!sharedId && !liveMessage));
+  liveStatus.textContent = liveMessage;
+  liveStart.hidden = watching || !match || Boolean(sharedId);
+  liveStart.disabled = liveBusy;
+  liveRename.hidden = !sharedId;
+  liveStop.hidden = !sharedId;
+  liveRename.disabled = liveStop.disabled = liveBusy;
+  liveWhatsApp.hidden = !sharedId;
+  liveLink.hidden = !sharedId;
+  if (sharedId) {
+    const url = new URL(location.pathname, location.origin);
+    url.hash = 'live=' + sharedId;
+    liveLink.value = url.href;
+    liveWhatsApp.href = 'https://wa.me/?text=' + encodeURIComponent('شاهد قيد المباراة مباشرة: ' + url.href);
+  } else {
+    liveLink.value = '';
+    liveWhatsApp.removeAttribute('href');
+  }
+}
+
+function syncSharing() {
+  if (!sharedId) return;
+  const version = ++publishVersion;
+  const id = sharedId;
+  liveMessage = 'جارٍ مزامنة القيد…';
+  renderSharing();
+  publishLive(id, JSON.stringify(liveSnapshot(match))).then(() => {
+    if (version !== publishVersion || sharedId !== id || liveBusy) return;
+    liveMessage = 'المشاركة المباشرة مفعّلة.';
+    renderSharing();
+  }).catch(() => {
+    if (version !== publishVersion || sharedId !== id || liveBusy) return;
+    liveMessage = 'تعذّرت المزامنة. أعد فتح الحاسبة من متصفح صاحب المباراة أو أوقف المشاركة وحاول مجدداً.';
+    renderSharing();
+  });
+}
+
+liveStart.addEventListener('click', async () => {
+  if (watching || !match || sharedId || liveBusy) return;
+  if (!configured) {
+    liveMessage = 'المشاركة المباشرة بانتظار إعداد الخدمة.';
+    renderSharing();
+    return;
+  }
+  liveBusy = true;
+  liveMessage = 'جارٍ إنشاء رابط المشاركة…';
+  renderSharing();
+  const id = crypto.randomUUID().replaceAll('-', '');
+  const key = liveKey + match.id;
+  try {
+    storage.setItem(key, id);
+    await createLive(id, JSON.stringify(liveSnapshot(match)));
+    sharedId = id;
+  } catch {
+    try { storage.removeItem(key); } catch {}
+    liveMessage = 'تعذّر بدء المشاركة. تحقّق من الاتصال وحاول مجدداً.';
+  } finally {
+    liveBusy = false;
+    renderSharing();
+  }
+  if (sharedId) syncSharing();
+});
+
+async function endSharing() {
+  if (liveBusy) return false;
+  if (!sharedId) return true;
+  liveBusy = true;
+  liveMessage = 'جارٍ إيقاف المشاركة…';
+  renderSharing();
+  try {
+    await stopLive(sharedId);
+    try { storage.removeItem(liveKey + match.id); } catch {}
+    sharedId = undefined;
+    liveMessage = 'توقفت المشاركة المباشرة.';
+    return true;
+  } catch {
+    liveMessage = 'تعذّر إيقاف المشاركة. تحقّق من الاتصال وحاول مجدداً.';
+    return false;
+  } finally {
+    liveBusy = false;
+    renderSharing();
+  }
+}
+
+liveStop.addEventListener('click', endSharing);
+liveLink.addEventListener('click', () => liveLink.select());
+liveRename.addEventListener('click', () => {
+  if (watching || !sharedId || liveBusy) return;
+  const labels = (solo() ? players : teams).slice(0, match.names.length);
+  document.querySelector('#live-name-fields').innerHTML = nameFields(labels, match.names);
+  liveNamesDialog.showModal();
+});
+document.querySelector('#live-cancel-names').addEventListener('click', () => liveNamesDialog.close());
+document.querySelector('#live-names-form').addEventListener('submit', event => {
+  event.preventDefault();
+  if (watching || !sharedId || liveBusy || !liveNamesDialog.open) return;
+  const names = [...event.currentTarget.querySelectorAll('input')].map(input => input.value.trim());
+  if (names.length !== match.names.length || names.some(name => !name || name.length > 40)) {
+    announce('أدخل اسماً لكل مشارك.');
+    return;
+  }
+  liveNamesDialog.close();
+  persist({ ...match, names });
+  render();
+});
+
 
 function announce(message) {
   notice.textContent = message;
@@ -53,7 +184,7 @@ function persist(next) {
   match = next;
   let archivedSuccessfully = true;
   try {
-    if (next && (next.endedAt == null || previous?.rounds !== next.rounds) && matchStandings().complete) {
+    if (next && (next.endedAt == null || previous?.rounds !== next.rounds || previous?.names !== next.names) && matchStandings().complete) {
       const entries = readArchive(storage);
       const archived = archiveMatch(entries, next);
       if (archived.entries !== entries) {
@@ -65,6 +196,7 @@ function persist(next) {
     archivedSuccessfully = false;
     announce('تعذّر حفظ المباراة في السجل.');
   }
+  if (match && previous && (match.rounds !== previous.rounds || match.names !== previous.names)) syncSharing();
   try {
     if (match) saveMatch(storage, match);
     else storage.removeItem(STORAGE_KEY);
@@ -112,9 +244,9 @@ function history(limit, totals) {
   const overflow = match.rounds.length > limit;
   const rows = Array.from({ length: Math.max(limit, match.rounds.length) }, (_, index) => {
     const round = match.rounds[index];
-    const scores = round ? scoreRound(round, matchConfig(match), allowsDown(index, limit)).map(display) : positions().map(() => '—');
+    const scores = round ? scoreRound(round, matchConfig(match), allowsDown(index, roundLimit(match.rounds))).map(display) : positions().map(() => '—');
     return `<tr class="${round ? 'recorded-row ' : ''}${index === match.rounds.length || index === editing ? 'current-row' : ''}">
-      <th scope="row">${number.format(index + 1)}</th>${scores.map((score, team) => `<td${round ? ' class="recorded-cell"' : ''}>${round ? `<div class="recorded-score">${score}${pencil(team, index)}</div>` : score}</td>`).join('')}
+      <th scope="row">${number.format(index + 1)}${round?.type === HIND_ZAT ? ' <small>هند زات</small>' : ''}</th>${scores.map((score, team) => `<td${round ? ' class="recorded-cell"' : ''}>${round ? `<div class="recorded-score">${score}${round.type === HIND_ZAT ? '' : pencil(team, index)}</div>` : score}</td>`).join('')}
     </tr>${round ? `<tr class="row-actions"><td colspan="${match.names.length + 1}">
       ${index >= limit ? '<span class="subtle">معلّقة</span>' : ''}
       <button type="button" data-edit="${index}" aria-label="تعديل اللعبة ${number.format(index + 1)}">تعديل</button>
@@ -134,6 +266,7 @@ function history(limit, totals) {
 
 function editor() {
   const showKhalasa = allowsKhalasa(match.rounds, editing ?? match.rounds.length);
+  const maxJokers = jokerLimit(matchConfig(match));
   return `<section class="panel" aria-labelledby="round-title">
     <div class="panel-heading"><h2 id="round-title" tabindex="-1">${editing === null ? 'تسجيل اللعبة' : 'تعديل اللعبة'} ${number.format((editing ?? match.rounds.length) + 1)}</h2></div>
     <form id="round-form" novalidate>
@@ -142,7 +275,7 @@ function editor() {
           <label for="win-${team}"><span class="team-suit" aria-hidden="true">${suits[team]}</span><span>${escape(name)}</span></label>
           <select id="win-${team}" data-win="${team}" aria-label="نوع الفوز · ${escape(name)}">
             <option value="">اختر نوع الفوز</option>
-            ${TYPES.map(({ label }, type) => type === 0 && !showKhalasa ? '' : `<option value="${type}" ${draft.winner === team && draft.type === type ? 'selected' : ''}>${label}</option>`).join('')}
+            ${TYPES.map(({ label, jokers }, type) => (type === 0 && !showKhalasa) || jokers > maxJokers || (type === HIND_ZAT && editing !== null && editing >= matchStandings().limit) ? '' : `<option value="${type}" ${draft.winner === team && draft.type === type ? 'selected' : ''}>${label}</option>`).join('')}
           </select>
           <div class="team-fields" id="fields-${team}"></div>
         </div>`).join('')}</div>
@@ -170,7 +303,7 @@ function renderHands(team) {
 }
 
 function fitDeclarations() {
-  const capacity = jokerCapacity(draft);
+  const capacity = jokerCapacity(draft, matchConfig(match));
   if (capacity === null || !draft.failed) return;
   let remaining = capacity;
   draft.failed = draft.failed.map((value, index) => {
@@ -182,7 +315,7 @@ function fitDeclarations() {
 }
 
 function declarationCapacity() {
-  return jokerCapacity(draft) ?? (TYPES[draft.type]?.jokers === null ? 3 : 0);
+  return jokerCapacity(draft, matchConfig(match)) ?? (TYPES[draft.type]?.jokers === null ? jokerLimit(matchConfig(match)) : 0);
 }
 
 function renderDeclarationOptions() {
@@ -212,12 +345,12 @@ function renderWinnerJoker() {
 }
 
 function renderFields() {
-  const downAllowed = draftAllowsDown();
+  const downAllowed = draft.type !== HIND_ZAT && draftAllowsDown();
   const showDeclarations = declarationCapacity() > 0;
   positions().forEach(team => {
     document.querySelector(`#team-${team}`).classList.toggle('selected', draft.winner === team);
     const fields = document.querySelector(`#fields-${team}`);
-    if (draft.winner === null || draft.winner === team) {
+    if (draft.winner === null || draft.winner === team || draft.type === HIND_ZAT) {
       fields.innerHTML = '';
       return;
     }
@@ -237,7 +370,7 @@ function renderFields() {
   renderDeclarationOptions();
   renderWinnerJoker();
   const penalty = document.querySelector('#penalty');
-  penalty.hidden = !draft.type || !allowsPenalty(matchConfig(match));
+  penalty.hidden = !draft.type || draft.type === HIND_ZAT || !allowsPenalty(matchConfig(match));
   penalty.innerHTML = penalty.hidden ? '' : `<label for="penalty-team">الشرهة</label>
     <select id="penalty-team"><option value="">بدون شرهة</option>
     ${positions().filter(team => team !== draft.winner).map(team =>
@@ -248,7 +381,7 @@ function renderFields() {
 
 function renderManual() {
   const container = document.querySelector('#manual-editor');
-  container.innerHTML = manualIndex === null || draft.winner === null ? '' : `
+  container.innerHTML = manualIndex === null || draft.winner === null || draft.type === HIND_ZAT ? '' : `
     <div class="manual-controls">
       <label for="manual-value">تعديل نقاط ${escape(match.names[manualIndex])}
         <input id="manual-value" type="text" dir="auto" autocomplete="off"
@@ -274,9 +407,14 @@ function updatePreview() {
   }
   try {
     const rounds = withDraft();
+    if (draft.type === HIND_ZAT) {
+      preview.innerHTML = '<p class="subtle">تنتهي المباراة بفوز صاحب هند زات دون إضافة نقاط.</p>';
+      approve.disabled = false;
+      return;
+    }
     const projected = matchStandings(rounds);
     const index = editing ?? match.rounds.length;
-    const scores = scoreRound(rounds[index], matchConfig(match), allowsDown(index, projected.limit));
+    const scores = scoreRound(rounds[index], matchConfig(match), allowsDown(index, roundLimit(rounds)));
     preview.innerHTML = `<div class="preview-scores" style="--participants: ${scores.length}">${scores.map((score, team) =>
       `<div>${escape(match.names[team])}<b>${display(score)}</b>${pencil(team)}</div>`).join('')}</div>`;
     if (editing !== null || draft.overrides?.some(value => value != null)) {
@@ -301,7 +439,7 @@ function nameFields(labels, names) {
 function rematchControls() {
   const labels = (solo() ? players : teams).slice(0, match.names.length);
   return `<div class="rematch">
-    <button class="primary" type="button" id="rematch" aria-controls="rematch-form" aria-expanded="false">إعادة المباراة</button>
+    <div class="match-actions"><button class="primary" type="button" id="rematch" aria-controls="rematch-form" aria-expanded="false">إعادة المباراة</button></div>
     <form id="rematch-form" aria-label="إعادة المباراة" hidden>
       ${nameFields(labels, match.names)}
       <div class="controls">
@@ -333,10 +471,17 @@ function renderSetupFields() {
   count.disabled = !options;
   const labels = setupMode === 'solo' ? players : teams;
   document.querySelector('#setup-names').innerHTML = nameFields(labels.slice(0, setupCount), setupNames);
+  const jokerSelect = document.querySelector('#setup-jokers');
+  const chooseJokers = setupMode === 'teams' && setupCount === 2;
+  jokerSelect.parentElement.hidden = !chooseJokers;
+  jokerSelect.disabled = !chooseJokers;
   document.querySelector('#start-match').hidden = !setupCount;
 }
 
 function render() {
+  app.before(livePanel, liveStart);
+  liveStart.hidden = true;
+  renderSharing();
   reset.hidden = !match;
   if (!match) {
     app.innerHTML = `<section class="panel setup">
@@ -349,6 +494,13 @@ function render() {
           <option value="solo">فردي</option>
         </select></label>
         <label hidden>عدد المشاركين<select id="setup-count" required disabled></select></label>
+        <label hidden>لعبكم جيكرين أو ثلاث جياكر؟
+          <select id="setup-jokers" required disabled>
+            <option value="">اختر عدد الجياكر</option>
+            <option value="2">جيكرين</option>
+            <option value="3">ثلاث جياكر</option>
+          </select>
+        </label>
         <div id="setup-names"></div>
         <button class="primary" id="start-match" type="submit" hidden>بدء المباراة</button>
       </form>
@@ -357,7 +509,7 @@ function render() {
     renderSetupFields();
     return;
   }
-  const { limit, totals, complete, winners } = matchStandings();
+  const { limit, totals, complete, winners, reason } = matchStandings();
   app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">
     <div class="score-title"><h2 id="score-title" tabindex="-1">مجموع النقاط</h2>
       <span class="progress">${number.format(Math.min(match.rounds.length, limit))} من ${number.format(limit)} لعبات</span></div>
@@ -367,10 +519,13 @@ function render() {
   ${complete ? `<section class="panel final" aria-labelledby="final-title">
     <h2 id="final-title" tabindex="-1">النتيجة النهائية</h2>
     <p>${winners.length === 1 ? 'الفائز' : 'تعادل في المركز الأول'} · ${winners.map(team => escape(match.names[team])).join('، ')}</p>
+    ${reason === 'hind-zat' ? '<p class="subtle">سبب الفوز · هند زات</p>' : ''}
     ${cards(totals, winners)}
     ${rematchControls()}
   </section>` : ''}
   <div class="dashboard">${!complete || editing !== null ? editor() : ''}${history(limit, totals)}</div>`;
+  document.querySelector('.match-actions').append(liveStart);
+  document.querySelector('.match-actions').after(livePanel);
   if (document.querySelector('#round-form')) {
     renderManual();
     renderFields();
@@ -382,15 +537,17 @@ function refresh(focus) {
   (document.querySelector(focus) ?? document.querySelector('#score-title'))?.focus();
 }
 
-function celebrate(winners) {
+function celebrate(winners, reason) {
   const dialog = document.querySelector('#victory-dialog');
   const final = document.querySelector('.final');
   const title = dialog.querySelector('#victory-title');
+  if (dialog.open) return;
   const confetti = dialog.querySelector('.victory-confetti');
   const names = winners.map(index => match.names[index]).join('، ');
   const winnerNames = document.createElement('bdi');
   winnerNames.textContent = names;
   title.replaceChildren('مبروك يا ', winnerNames);
+  if (reason === 'hind-zat') title.append(document.createElement('br'), 'هند زات');
 
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
     confetti.replaceChildren(...Array.from({ length: 28 }, (_, index) => {
@@ -413,13 +570,18 @@ function celebrate(winners) {
   dialog.addEventListener('close', () => {
     clearTimeout(timer);
     confetti.replaceChildren();
-    final.hidden = false;
-    final.querySelector('h2').focus();
+    const currentFinal = document.querySelector('.final');
+    if (currentFinal) {
+      currentFinal.hidden = false;
+      currentFinal.querySelector('h2').focus();
+    }
   }, { once: true });
 }
 
 app.addEventListener('change', ({ target }) => {
+  if (watching) return;
   if (target.id === 'setup-mode' || target.id === 'setup-count') {
+    document.querySelector('#setup-jokers').value = '';
     if (target.id === 'setup-mode') {
       setupMode = target.value;
       setupCount = 0;
@@ -433,10 +595,10 @@ app.addEventListener('change', ({ target }) => {
   if ('win' in target.dataset) {
     const team = Number(target.dataset.win);
     const type = target.value === '' ? null : Number(target.value);
-    if (draft.winner !== team || type === null) {
-      const overrides = type === null ? [] : draft.overrides;
+    if (draft.winner !== team || type === null || draft.type === HIND_ZAT || type === HIND_ZAT) {
+      const overrides = type === null || type === HIND_ZAT ? [] : draft.overrides;
       draft = { ...blank(), overrides };
-      if (type === null) manualIndex = null;
+      if (type === null || type === HIND_ZAT) manualIndex = null;
     }
     draft.winner = type === null ? null : team;
     if (draft.type !== type) draft.jokerCount = null;
@@ -484,6 +646,7 @@ function normalizePointInput(input) {
 }
 
 app.addEventListener('input', ({ target }) => {
+  if (watching) return;
   if ('player' in target.dataset) {
     draft.down[target.dataset.team][target.dataset.player] = normalizePointInput(target);
     updatePreview();
@@ -500,8 +663,9 @@ app.addEventListener('input', ({ target }) => {
   }
 });
 
-app.addEventListener('submit', event => {
+app.addEventListener('submit', async event => {
   event.preventDefault();
+  if (watching) return;
   const rematch = event.target.id === 'rematch-form';
   if (rematch || event.target.id === 'setup-form') {
     if (rematch && event.target.hidden) return;
@@ -514,7 +678,11 @@ app.addEventListener('submit', event => {
       invalid.reportValidity();
       return;
     }
-    persist({ id: crypto.randomUUID(), mode, names: inputs.map(input => input.value.trim()), rounds: [] });
+    const jokers = rematch ? match.jokers : Number(document.querySelector('#setup-jokers').value);
+    if (!rematch && mode === 'teams' && inputs.length === 2 && jokers !== 2 && jokers !== 3) return;
+    if (rematch && (liveBusy || (sharedId && !await endSharing()))) return;
+    liveMessage = '';
+    persist({ id: crypto.randomUUID(), mode, names: inputs.map(input => input.value.trim()), rounds: [], ...(jokers ? { jokers } : {}) });
     editing = null;
     manualIndex = null;
     draft = blank();
@@ -522,8 +690,11 @@ app.addEventListener('submit', event => {
   } else if (event.target.id === 'round-form') {
     try {
       const rounds = withDraft();
-      const { complete, winners } = matchStandings(rounds);
-      const firstFinish = complete && editing === null && match.endedAt == null;
+      const { complete, winners, reason } = matchStandings(rounds);
+      const previous = matchStandings();
+      const firstFinish = complete && (reason === 'hind-zat'
+        ? previous.reason !== reason || previous.winners[0] !== winners[0]
+        : editing === null && match.endedAt == null);
       const saved = persist({ ...match, rounds, redo: [], pending: undefined });
       const message = editing === null ? 'تم اعتماد اللعبة.' : 'تم حفظ التعديل.';
       editing = null;
@@ -531,7 +702,7 @@ app.addEventListener('submit', event => {
       draft = blank();
       if (firstFinish) {
         render();
-        celebrate(winners);
+        celebrate(winners, reason);
       } else {
         refresh(complete ? '#final-title' : '#round-title');
       }
@@ -545,6 +716,7 @@ app.addEventListener('submit', event => {
 });
 
 app.addEventListener('click', ({ target }) => {
+  if (watching) return;
   const button = target.closest('button');
   if (!button) return;
   if (button.id === 'kabru-open') {
@@ -565,7 +737,7 @@ app.addEventListener('click', ({ target }) => {
     showRematch(false);
   } else if ('edit' in button.dataset || 'round' in button.dataset) {
     editing = Number(button.dataset.edit ?? button.dataset.round);
-    draft = structuredClone(match.rounds[editing]);
+    draft = { ...blank(), ...structuredClone(match.rounds[editing]) };
     manualIndex = 'manual' in button.dataset ? Number(button.dataset.manual) : null;
     rememberDraft();
     refresh(manualIndex === null ? '#round-title' : '#manual-value');
@@ -597,10 +769,13 @@ app.addEventListener('click', ({ target }) => {
     } else if (editing !== null && editing > index) {
       editing -= 1;
     }
+    const previousResult = matchStandings();
     const saved = persist({ ...next, pending: { draft, editing, manualIndex } });
     const nextButton = button.id === 'redo' && !match.redo?.length ? '#undo'
       : button.id === 'undo' && !match.rounds.length ? '#redo' : '#' + button.id;
     refresh(undo || redo ? nextButton : '#round-title');
+    const result = matchStandings();
+    if (redo && result.reason === 'hind-zat' && !previousResult.complete) celebrate(result.winners, result.reason);
     if (saved) announce(redo ? 'تمت إعادة اللعبة.' : undo ? 'تم التراجع عن اللعبة.' : 'تم حذف اللعبة.');
   } else if (button.id === 'cancel') {
     editing = null;
@@ -611,8 +786,11 @@ app.addEventListener('click', ({ target }) => {
   }
 });
 
-reset.addEventListener('click', () => {
+reset.addEventListener('click', async () => {
+  if (watching || liveBusy) return;
   if (!confirm('هل تريد بدء مباراة جديدة؟ سيتم مسح الأسماء واللعبات الحالية.')) return;
+  if (sharedId && !await endSharing()) return;
+  liveMessage = '';
   editing = null;
   manualIndex = null;
   setupMode = '';
@@ -628,13 +806,14 @@ function archiveSummary(entry) {
   const winner = entry.winners.length === 1 ? 'الفائز' : 'تعادل في المركز الأول';
   return `<span class="subtle">${dateFormat.format(entry.endedAt)} · ${mode}</span>
     <strong>${entry.names.map(escape).join(' · ')}</strong>
-    <span>${winner}: ${entry.winners.map(index => escape(entry.names[index])).join('، ')}</span>`;
+    <span>${winner}: ${entry.winners.map(index => escape(entry.names[index])).join('، ')}${entry.reason === 'hind-zat' ? ' · هند زات' : ''}</span>`;
 }
 
 function renderArchive(entries = readArchive(storage)) {
   const entry = entries.find(item => item.id === selectedArchive);
   if (entry) {
     const rows = entry.scores.map((scores, index) => `<tr><th scope="row">${number.format(index + 1)}
+      ${entry.reason === 'hind-zat' && index === entry.limit - 1 ? ' <small>هند زات</small>' : ''}
       ${index >= entry.limit ? '<small class="subtle">معلّقة</small>' : ''}</th>
       ${scores.map(score => `<td>${display(score)}</td>`).join('')}</tr>`).join('');
     archiveContent.innerHTML = `<button type="button" class="secondary" data-archive-action="list">العودة إلى السجل</button>
@@ -693,10 +872,84 @@ archiveContent.addEventListener('click', event => {
   }
 });
 
-try {
-  readArchive(storage);
-} catch {
-  // The calculator can still run if the archive is unavailable.
+function renderLiveMatch(snapshot) {
+  const victory = document.querySelector('#victory-dialog');
+  const celebrateNow = snapshot?.complete && (!match?.complete || (snapshot.reason === 'hind-zat'
+    && (match.reason !== snapshot.reason || match.winners[0] !== snapshot.winners[0])));
+  match = snapshot;
+  if (!snapshot) {
+    if (victory.open) victory.close();
+    app.innerHTML = '';
+    return;
+  }
+  const { names, scores, totals, limit, complete, winners, reason } = snapshot;
+  if (!complete && victory.open) victory.close();
+  const rows = Array.from({ length: Math.max(limit, scores.length) }, (_, index) =>
+    `<tr><th scope="row">${number.format(index + 1)}${reason === 'hind-zat' && index === limit - 1 ? ' <small>هند زات</small>' : ''}${index >= limit ? ' <small class="subtle">معلّقة</small>' : ''}</th>
+      ${names.map((_, position) => `<td>${scores[index] ? display(scores[index][position]) : '—'}</td>`).join('')}</tr>`).join('');
+  app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">
+    <div class="score-title"><h2 id="score-title">مجموع النقاط</h2>
+      <span class="progress">${number.format(Math.min(scores.length, limit))} من ${number.format(limit)} لعبات</span></div>
+    ${cards(totals)}
+  </section>
+  ${complete ? `<section class="panel final" aria-labelledby="final-title" ${victory.open ? 'hidden' : ''}>
+    <h2 id="final-title" tabindex="-1">النتيجة النهائية</h2>
+    <p>${winners.length === 1 ? 'الفائز' : 'تعادل في المركز الأول'} · ${winners.map(index => escape(names[index])).join('، ')}</p>
+    ${reason === 'hind-zat' ? '<p class="subtle">سبب الفوز · هند زات</p>' : ''}
+    ${cards(totals, winners)}
+  </section>` : ''}
+  <section class="panel history-panel" aria-labelledby="live-history-title">
+    <h2 id="live-history-title">سجل اللعبات</h2>
+    ${resultsTable(names, totals, rows, 'live-history-title')}
+  </section>`;
+  if (celebrateNow) celebrate(winners, reason);
 }
-if (match) persist({ ...match, id: match.id ?? crypto.randomUUID() });
-render();
+
+function startWatching() {
+  archiveButton.closest('.archive-launch').hidden = true;
+  let received = false;
+  let connected = false;
+  let unavailable = false;
+  const updateStatus = () => {
+    liveMessage = unavailable ? 'تعذّر فتح القيد المباشر.'
+      : received && !match ? 'المشاركة متوقفة أو الرابط غير متاح.'
+      : match ? (connected ? 'مشاهدة مباشرة · للقراءة فقط' : 'انقطع الاتصال. يُعرض آخر قيد وصل.')
+      : 'جارٍ الاتصال بالقيد المباشر…';
+    renderSharing();
+  };
+  const onError = () => {
+    unavailable = true;
+    renderLiveMatch(null);
+    updateStatus();
+  };
+  if (!configured || !validLiveId(viewId)) {
+    onError();
+    return;
+  }
+  updateStatus();
+  watchLive(viewId, snapshot => {
+    received = true;
+    unavailable = false;
+    renderLiveMatch(snapshot);
+    updateStatus();
+  }, onError, online => {
+    connected = online;
+    updateStatus();
+  }).catch(onError);
+}
+
+if (watching) {
+  startWatching();
+} else {
+  try {
+    readArchive(storage);
+  } catch {
+    // The calculator can still run if the archive is unavailable.
+  }
+  if (match) {
+    persist({ ...match, id: match.id ?? crypto.randomUUID() });
+    restoreSharing();
+    if (configured) syncSharing();
+  }
+  render();
+}

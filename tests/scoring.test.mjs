@@ -213,3 +213,23 @@ test('تجاهل شرهة كابروا المحفوظة في مباراة فري
   assert.deepEqual(JSON.parse(entries.get(STORAGE_KEY)).totals, [-60, 400]);
   assert.deepEqual(scoreRound({ ...savedRound, overrides: [null, 450] }, { mode: 'teams', count: 2 }), [-60, 450]);
 });
+
+test('two-team games can cap winning and losing declarations at two jokers', () => {
+  const two = { mode: 'teams', count: 2, jokers: 2 };
+  const three = { ...two, jokers: 3 };
+  const hands = [[], []];
+  for (const type of [5, 8]) {
+    const data = round(type, null, hands);
+    assert.throws(() => scoreRound(data, two));
+    assert.doesNotThrow(() => recordRound([], data, 0, three));
+  }
+  for (const declaration of [2, 6]) {
+    const data = { ...round(1, null, hands), failed: [null, declaration] };
+    assert.throws(() => scoreRound(data, two));
+    assert.doesNotThrow(() => recordRound([], data, 0, three));
+  }
+  const combined = { ...round(3, null, hands), failed: [null, 1] };
+  assert.throws(() => recordRound([], combined, 0, two));
+  assert.doesNotThrow(() => recordRound([], combined, 0, three));
+  assert.doesNotThrow(() => recordRound([], { ...round(1, null, hands), failed: [null, 5] }, 0, two));
+});

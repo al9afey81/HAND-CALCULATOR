@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="calculator-version" content="2.6.0">
+  <meta name="calculator-version" content="2.8.2">
   <meta name="theme-color" content="#123e31">
   <meta name="description" content="حساب نقاط لعبة الهند للأفرقة واللعب الفردي.">
   <title>حاسبة الهند – النخبة</title>
-  <link rel="stylesheet" href="./styles.css?v=2.6.0">
+  <link rel="stylesheet" href="./styles.css?v=2.8.2">
 </head>
 <body>
   <header class="masthead">
@@ -24,6 +24,26 @@
     <span role="status">يتوفر تحديث جديد</span>
     <button class="primary" id="apply-update" type="button">تحديث الآن</button>
   </aside>
+  <button id="live-start" class="primary" type="button" hidden>مشاركة القيد</button>
+  <section id="live-panel" aria-label="مشاركة القيد المباشر" hidden>
+    <div class="controls">
+      <a id="live-whatsapp" class="secondary" target="_blank" rel="noopener noreferrer" hidden>مشاركة عبر واتساب</a>
+      <button id="live-rename" class="secondary" type="button" hidden>تعديل الأسماء</button>
+      <button id="live-stop" class="secondary" type="button" hidden>إيقاف المشاركة المباشرة</button>
+    </div>
+    <input id="live-link" type="url" dir="ltr" aria-label="رابط مشاهدة القيد" readonly hidden>
+    <div id="live-status" class="subtle" role="status"></div>
+  </section>
+  <dialog id="live-names-dialog" aria-labelledby="live-names-title">
+    <form class="panel" id="live-names-form">
+      <h2 id="live-names-title">تعديل الأسماء</h2>
+      <div id="live-name-fields"></div>
+      <div class="controls">
+        <button class="primary" type="submit">حفظ الأسماء</button>
+        <button id="live-cancel-names" class="secondary" type="button">إلغاء</button>
+      </div>
+    </form>
+  </dialog>
   <main id="app" class="shell"></main>
   <div class="archive-launch shell"><button id="archive-open" class="secondary" type="button">سجل المباريات</button></div>
   <dialog id="archive-dialog" aria-labelledby="archive-title">
@@ -33,7 +53,7 @@
       <div id="archive-content"></div>
     </section>
   </dialog>
-  <footer class="version">الإصدار <bdi>2.6.0</bdi></footer>
+  <footer class="version">الإصدار <bdi>2.8.2</bdi></footer>
   <div id="notice" role="status" aria-live="polite"></div>
   <dialog id="kabru-dialog" aria-labelledby="kabru-title">
     <div class="kabru-screen">
@@ -56,8 +76,8 @@
       </div>
     </div>
   </dialog>
-  <script type="module" src="./app.mjs?v=2.6.0"></script>
-  <script type="module" src="./updates.mjs?v=2.6.0"></script>
+  <script type="module" src="./app.mjs?v=2.8.2"></script>
+  <script type="module" src="./updates.mjs?v=2.8.2"></script>
   <!-- Cloudflare Web Analytics -->
   <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "cd0bcb47a03946d9a38bb46c95271505"}'></script>
   <!-- End Cloudflare Web Analytics -->

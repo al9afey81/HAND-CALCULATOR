@@ -10,7 +10,10 @@ export const TYPES = [
     jokers,
     factor: jokers * 8 + (color ? 4 : 0),
   })),
+  { label: 'هند زات', factor: 0, jokers: 0 },
 ];
+
+export const HIND_ZAT = TYPES.length - 1;
 
 export function latinDigits(value) {
   const digits = '٠١٢٣٤٥٦٧٨٩';
@@ -51,11 +54,16 @@ export const FAILED_DECLARATIONS = [
   { label: 'ثلاث جواكر ولون', jokers: 3, units: 4 },
 ];
 
-export function jokerCapacity(round) {
+export function jokerLimit({ mode, count, jokers } = {}) {
+  return mode === 'teams' && count === 2 && jokers === 2 ? 2 : 3;
+}
+
+export function jokerCapacity(round, config) {
   const rule = TYPES[round.type];
   if (!rule) return null;
+  if (round.type === HIND_ZAT) return 0;
   const jokers = rule.jokers ?? round.jokerCount;
-  return rule.jokers !== null || jokers === 0 || jokers === 1 ? 3 - jokers : null;
+  return rule.jokers !== null || jokers === 0 || jokers === 1 ? jokerLimit(config) - jokers : null;
 }
 
 export function hasLoserDeclaration({ failed, winner }) {
@@ -98,6 +106,13 @@ export function scoreRound(round, config, downAllowed = true) {
   const down = round.down ?? positions.map(() => []);
   const rule = TYPES[type];
   if (!Number.isInteger(type) || !rule || !positions.includes(winner)) throw new Error('اختر الفائز ونوع الفوز.');
+  if (type === HIND_ZAT) return positions.map(() => 0);
+  if (jokerLimit(config) === 2 && (rule.jokers === 3
+      || failed.some((declaration, index) => index !== winner && FAILED_DECLARATIONS[declaration]?.jokers === 3)
+      || (hasLoserDeclaration(round) && (declaredJokers(round) > (jokerCapacity(round, config) ?? -1)
+        || jokerCapacity(round, config) === 0)))) {
+    throw new Error('الإعلان يتجاوز عدد الجياكر المتاحة.');
+  }
   if (!Array.isArray(down) || down.length !== positions.length || (penalty !== null && !positions.includes(penalty))) {
     throw new Error('بيانات اللعبة غير صالحة.');
   }
@@ -121,13 +136,15 @@ export function scoreRound(round, config, downAllowed = true) {
 
 export function standings(rounds, config) {
   const positions = participants(config);
-  const limit = roundLimit(rounds);
+  const scoringLimit = roundLimit(rounds);
+  const zatIndex = rounds.findIndex(round => round.type === HIND_ZAT);
+  const limit = zatIndex === -1 ? scoringLimit : zatIndex + 1;
   const active = rounds.slice(0, limit);
   const totals = active.reduce((totals, round, index) =>
-    scoreRound(round, config, allowsDown(index, limit)).map((score, index) => totals[index] + score), positions.map(() => 0));
+    scoreRound(round, config, allowsDown(index, scoringLimit)).map((score, index) => totals[index] + score), positions.map(() => 0));
   const complete = active.length === limit;
-  const winners = complete ? positions.filter(index => totals[index] === Math.min(...totals)) : [];
-  return { limit, totals, complete, winners };
+  const winners = zatIndex !== -1 ? [rounds[zatIndex].winner] : complete ? positions.filter(index => totals[index] === Math.min(...totals)) : [];
+  return { limit, totals, complete, winners, ...(zatIndex !== -1 ? { reason: 'hind-zat' } : {}) };
 }
 
 export function recordRound(rounds, round, index = rounds.length, config) {
@@ -139,7 +156,11 @@ export function recordRound(rounds, round, index = rounds.length, config) {
     throw new Error('لا يمكن اعتماد الخالصة في اللعبة الأخيرة.');
   }
   const updated = rounds.slice();
-  const capacity = jokerCapacity(round);
+  if (round.type === HIND_ZAT) {
+    if (index >= standings(rounds, config).limit) throw new Error('هند زات متاح للعبات النشطة.');
+    round = { type: HIND_ZAT, winner: round.winner };
+  }
+  const capacity = jokerCapacity(round, config);
   if (hasLoserDeclaration(round)) {
     if (capacity === null) throw new Error('حدّد هل كان الفوز بجيكر أو بلون.');
     if (capacity === 0 || declaredJokers(round) > capacity) {
@@ -163,7 +184,7 @@ export function removeRound(rounds, index = rounds.length - 1) {
 export const STORAGE_KEY = 'hind-calculator.v1';
 
 export function matchConfig(match) {
-  return { mode: match.mode ?? 'teams', count: match.names.length };
+  return { mode: match.mode ?? 'teams', count: match.names.length, jokers: match.jokers };
 }
 
 export function saveMatch(storage, match) {
@@ -178,10 +199,11 @@ export function loadMatch(storage) {
     const config = matchConfig(match);
     for (const round of match.rounds) scoreRound(round, config);
     if (standings(match.rounds, config).totals.some(total => !Number.isFinite(total))) return null;
-    const { names, rounds, mode, pending, id, endedAt } = match;
+    const { names, rounds, mode, pending, id, endedAt, jokers } = match;
     const redo = Array.isArray(match.redo) && rounds.length + match.redo.length <= 7 ? match.redo : [];
     for (const round of redo) scoreRound(round, config);
     return { names, rounds, ...(mode === undefined ? {} : { mode }), ...(pending ? { pending } : {}),
+      ...(jokers === 2 || jokers === 3 ? { jokers } : {}),
       ...(typeof id === 'string' ? { id } : {}),
       ...(Number.isFinite(endedAt) ? { endedAt } : {}),
       ...(redo.length ? { redo } : {}) };

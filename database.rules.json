@@ -1,0 +1,16 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "liveMatches": {
+      "$id": {
+        ".read": "$id.length == 32 && $id.matches(/^[a-f0-9]+$/)",
+        ".write": "$id.length == 32 && $id.matches(/^[a-f0-9]+$/) && auth != null && auth.token.firebase.sign_in_provider == 'anonymous' && ((!data.exists() && (!newData.exists() || newData.child('owner').val() == auth.uid)) || (data.child('owner').val() == auth.uid && (!newData.exists() || newData.child('owner').val() == auth.uid)))",
+        ".validate": "newData.hasChildren(['owner', 'payload'])",
+        "owner": { ".validate": "newData.isString() && newData.val() == auth.uid" },
+        "payload": { ".validate": "newData.isString() && newData.val().length <= 8192" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
