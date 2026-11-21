@@ -1,5 +1,5 @@
 import { firebaseConfig } from './live-config.mjs?v=2.8.2';
-import { allowsDown, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT } from './scoring.mjs?v=2.8.5';
+import { allowsDown, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.8.9';
 
 export const configured = Boolean(firebaseConfig?.databaseURL && firebaseConfig?.apiKey);
 export const validLiveId = id => /^[a-f0-9]{32}$/.test(id);
@@ -49,6 +49,7 @@ export function liveSnapshot(match, kabru) {
   const { limit, totals, complete, winners, reason } = current;
   const gaps = scoreGaps(match.rounds, config, current);
   return {
+    ...(config.mode === 'teams' && validMembers(match.members, config.count) ? { members: match.members } : {}),
     mode: config.mode, names: match.names, limit, totals, complete, winners, ...(reason ? { reason } : {}),
     ...(kabru ? { kabru } : {}), ...(gaps ? { gaps } : {}),
     scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, roundLimit(match.rounds)))),
@@ -56,7 +57,7 @@ export function liveSnapshot(match, kabru) {
 }
 
 export function decodeLiveSnapshot(payload) {
-  const { mode, names, limit, scores, totals, complete, winners, reason, kabru, gaps } = JSON.parse(payload);
+  const { mode, names, limit, scores, totals, complete, winners, reason, kabru, gaps, members } = JSON.parse(payload);
   const count = names?.length;
   const validScores = values => Array.isArray(values) && values.length === count && values.every(Number.isFinite);
   if (!Array.isArray(names) || !names.every(name => typeof name === 'string' && name.trim() && name.length <= 40)
@@ -67,7 +68,7 @@ export function decodeLiveSnapshot(payload) {
       || !validScores(totals) || complete !== (scores.length >= limit) || !Array.isArray(winners)
       || winners.some(index => !Number.isInteger(index) || index < 0 || index >= count)
       || (complete ? !winners.length : winners.length)) throw new Error('Invalid live scores');
-  const validGaps = mode === 'teams' && count === 3 && !complete && scores.length >= 2
+  const validGaps = mode === 'teams' && count === 3 && !complete && scores.length >= 3
     && Array.isArray(gaps) && gaps.length === count && gaps.every((entry, index) => {
       if (!entry || entry.gap !== Math.min(Number.MAX_VALUE, totals[index] - Math.min(...totals))) return false;
       const { type, penalty, table, out } = entry;
@@ -97,6 +98,7 @@ export function decodeLiveSnapshot(payload) {
     }
   }
   return { mode, names, limit, scores, totals, complete, winners,
+    ...(mode === 'teams' && validMembers(members, count) ? { members } : {}),
     ...(reason ? { reason } : {}), ...(kabru ? { kabru } : {}), ...(validGaps ? { gaps } : {}) };
 
 }

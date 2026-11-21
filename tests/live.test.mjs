@@ -83,6 +83,7 @@ test('live Kabru carries the owner draw without changing the scores', () => {
 test('score gaps reach viewers with existing and current snapshots supported', () => {
   const match = { mode: 'teams', names: ['أ', 'ب', 'ج'], rounds: [
     { ...round(3), overrides: [0, 0, 0] },
+    { ...round(3), overrides: [0, 0, 0] },
     { ...round(3), overrides: [0, 490, 700] },
   ] };
   const snapshot = liveSnapshot(match);
@@ -93,4 +94,13 @@ test('score gaps reach viewers with existing and current snapshots supported', (
     assert.equal(decoded.gaps, undefined);
     assert.deepEqual(decoded.totals, snapshot.totals);
   }
+});
+
+test('optional team members travel with the live snapshot without affecting scores', () => {
+  const match = { mode: 'teams', names: ['أ', 'ب'], rounds: [round(2)] };
+  const original = liveSnapshot(match);
+  const members = [['علي', ''], ['يوسف', 'سالم']];
+  const snapshot = liveSnapshot({ ...match, members });
+  assert.deepEqual(decodeLiveSnapshot(JSON.stringify(snapshot)), { ...original, members });
+  assert.deepEqual(decodeLiveSnapshot(JSON.stringify({ ...snapshot, members: [['invalid']] })), original);
 });

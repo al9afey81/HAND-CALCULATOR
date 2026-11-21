@@ -1,7 +1,7 @@
-import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.5';
+import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.9';
 import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.8.2';
 import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
-import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.5';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.9';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -15,7 +15,8 @@ const liveWhatsApp = document.querySelector('#live-whatsapp');
 const liveRename = document.querySelector('#live-rename');
 const liveNamesDialog = document.querySelector('#live-names-dialog');
 const liveStop = document.querySelector('#live-stop');
-const liveKey = 'hind-calculator.live.';
+const legacyLiveKey = 'hind-calculator.live.';
+const liveKey = legacyLiveKey + 'session';
 const notice = document.querySelector('#notice');
 const archiveDialog = document.querySelector('#archive-dialog');
 const archiveButton = document.querySelector('#archive-open');
@@ -52,6 +53,7 @@ let manualIndex = match?.pending?.manualIndex ?? null;
 let setupMode = '';
 let setupCount = 0;
 let setupNames = [];
+let setupMembers = [];
 let noticeTimer;
 let sharedId;
 let liveBusy = false;
@@ -61,17 +63,27 @@ let publishVersion = 0;
 
 function restoreSharing() {
   try {
-    const id = storage?.getItem(liveKey + match?.id);
-    if (validLiveId(id)) sharedId = id;
+    const id = storage?.getItem(liveKey);
+    if (validLiveId(id)) {
+      sharedId = id;
+    } else if (match) {
+      const key = legacyLiveKey + match.id;
+      const legacyId = storage?.getItem(key);
+      if (validLiveId(legacyId)) {
+        sharedId = legacyId;
+        storage.setItem(liveKey, legacyId);
+        storage.removeItem(key);
+      }
+    }
   } catch {}
 }
 
 function renderSharing() {
-  livePanel.hidden = !watching && (!match || (!sharedId && !liveMessage));
+  livePanel.hidden = !watching && (!sharedId && (!match || !liveMessage));
   liveStatus.textContent = liveMessage;
   liveStart.hidden = watching || !match || Boolean(sharedId);
   liveStart.disabled = liveBusy;
-  liveRename.hidden = !sharedId;
+  liveRename.hidden = !match || !sharedId;
   liveStop.hidden = !sharedId;
   liveRename.disabled = liveStop.disabled = liveBusy;
   liveWhatsApp.hidden = !sharedId;
@@ -88,7 +100,7 @@ function renderSharing() {
 }
 
 function syncSharing() {
-  if (!sharedId) return;
+  if (!sharedId || !match || liveBusy) return;
   const version = ++publishVersion;
   const id = sharedId;
   liveMessage = 'جارٍ مزامنة القيد…';
@@ -115,13 +127,12 @@ liveStart.addEventListener('click', async () => {
   liveMessage = 'جارٍ إنشاء رابط المشاركة…';
   renderSharing();
   const id = crypto.randomUUID().replaceAll('-', '');
-  const key = liveKey + match.id;
   try {
-    storage.setItem(key, id);
+    storage.setItem(liveKey, id);
     await createLive(id, JSON.stringify(liveSnapshot(match)));
     sharedId = id;
   } catch {
-    try { storage.removeItem(key); } catch {}
+    try { storage.removeItem(liveKey); } catch {}
     liveMessage = 'تعذّر بدء المشاركة. تحقّق من الاتصال وحاول مجدداً.';
   } finally {
     liveBusy = false;
@@ -138,7 +149,7 @@ async function endSharing() {
   renderSharing();
   try {
     await stopLive(sharedId);
-    try { storage.removeItem(liveKey + match.id); } catch {}
+    try { storage.removeItem(liveKey); } catch {}
     sharedId = undefined;
     liveMessage = 'توقفت المشاركة المباشرة.';
     return true;
@@ -153,23 +164,29 @@ async function endSharing() {
 
 liveStop.addEventListener('click', endSharing);
 liveLink.addEventListener('click', () => liveLink.select());
-liveRename.addEventListener('click', () => {
-  if (watching || !sharedId || liveBusy) return;
+function editNames(membersOnly = false) {
+  if (watching || !match) return;
   const labels = (solo() ? players : teams).slice(0, match.names.length);
-  document.querySelector('#live-name-fields').innerHTML = nameFields(labels, match.names);
+  document.querySelector('#live-names-title').textContent = membersOnly ? 'تعديل أسماء الأعضاء' : 'تعديل الأسماء';
+  document.querySelector('#live-name-fields').innerHTML = membersOnly
+    ? match.names.map((name, index) => memberFields(name, index, match.members)).join('')
+    : nameFields(labels, match.names, solo() ? undefined : match.members ?? []);
   liveNamesDialog.showModal();
-});
+}
+liveRename.addEventListener('click', () => editNames());
 document.querySelector('#live-cancel-names').addEventListener('click', () => liveNamesDialog.close());
 document.querySelector('#live-names-form').addEventListener('submit', event => {
   event.preventDefault();
-  if (watching || !sharedId || liveBusy || !liveNamesDialog.open) return;
-  const names = [...event.currentTarget.querySelectorAll('input')].map(input => input.value.trim());
-  if (names.length !== match.names.length || names.some(name => !name || name.length > 40)) {
+  if (watching || !match || !liveNamesDialog.open) return;
+  const inputs = [...event.currentTarget.querySelectorAll('[name^="participant-"]')];
+  const names = inputs.length ? inputs.map(input => input.value.trim()) : match.names;
+  if (names.some(name => !name || name.length > 40)) {
     announce('أدخل اسماً لكل مشارك.');
     return;
   }
+  const members = solo() ? undefined : readMembers(event.currentTarget, names.length);
   liveNamesDialog.close();
-  persist({ ...match, names });
+  persist({ ...match, names, members });
   render();
 });
 
@@ -197,7 +214,8 @@ function persist(next) {
     archivedSuccessfully = false;
     announce('تعذّر حفظ المباراة في السجل.');
   }
-  if (match && previous && (match.rounds !== previous.rounds || match.names !== previous.names)) syncSharing();
+  if (match && (match.rounds !== previous?.rounds || match.names !== previous?.names
+      || match.members !== previous?.members)) syncSharing();
   try {
     if (match) saveMatch(storage, match);
     else storage.removeItem(STORAGE_KEY);
@@ -240,9 +258,13 @@ function recommendations(totals, gaps) {
     } else if (entry.type === undefined) {
       advice = 'لا يكفي فوز واحد بالنقاط لتجاوز المتصدر';
     } else {
-      const penalty = entry.penalty === undefined ? '' : ` وعط الشرهة لـ${match.names[entry.penalty]}`;
+      const recipient = match.names[entry.penalty];
+      const penalty = recipient ? ` وعط الشرهة ${recipient.startsWith('ال') ? 'ل' + recipient.slice(1) : 'لـ' + recipient}` : '';
       if (!entry.table && !namedLeader) chase = `وتصيد ${match.names[leader]}`;
-      advice = `${entry.table ? 'تبي تلعب؟' : 'يبيلك'} ${TYPES[entry.type].label}${penalty}${entry.table ? ' 😏' : ''}`;
+      const ordinaryStay = entry.table && entry.type === 1;
+      advice = ordinaryStay
+        ? `إذا بتلعب، هند عادي${penalty} 😏`
+        : `يبيلك ${TYPES[entry.type].label}${penalty}`;
       if (!entry.table) namedLeader = true;
     }
     const chaseText = chase ? ` <span class="score-advice-chase">${escape(chase)}</span>` : '';
@@ -256,7 +278,10 @@ function cards(totals, winners = [], ranked = false) {
     const rank = ranked ? totals.filter(points => points < total).length : -1;
     return `
     <div class="score-card ${winners.includes(team) || rank === 0 ? 'leading' : ''}">
-      <h3>${escape(match.names[team])}</h3>
+      ${match.members?.[team]?.some(Boolean)
+        ? `<details class="score-members"><summary><h3>${escape(match.names[team])}</h3></summary>
+          <span>${match.members[team].filter(Boolean).map(escape).join('، ')}</span></details>`
+        : `<h3>${escape(match.names[team])}</h3>`}
       ${ranked ? `<span class="score-rank">${labels[rank]}</span>` : ''}
       <b>${display(total)}</b>
     </div>`;
@@ -482,17 +507,31 @@ function updatePreview() {
   }
 }
 
-function nameFields(labels, names) {
+function memberFields(label, index, members) {
+  return `<fieldset class="member-fields"><legend>أعضاء ${escape(label)} · اختياري</legend>
+    ${[0, 1].map(seat => `<label>العضو ${seat + 1}<input name="member-${index}-${seat}" value="${escape(members?.[index]?.[seat] ?? '')}" maxlength="40" dir="auto"></label>`).join('')}
+  </fieldset>`;
+}
+
+function readMembers(form, count) {
+  const data = new FormData(form);
+  const members = Array.from({ length: count }, (_, index) =>
+    [0, 1].map(seat => String(data.get(`member-${index}-${seat}`) ?? '').trim()));
+  return members.some(team => team.some(Boolean)) ? members : undefined;
+}
+
+function nameFields(labels, names, members) {
   return labels.map((label, index) =>
-    `<label>${label}<input name="participant-${index}" placeholder="${label}" value="${escape(names[index] ?? '')}" maxlength="40" dir="auto" required></label>`).join('');
+    `<label>${label}<input name="participant-${index}" placeholder="${label}" value="${escape(names[index] ?? '')}" maxlength="40" dir="auto" required></label>
+    ${members ? memberFields(label, index, members) : ''}`).join('');
 }
 
 function rematchControls() {
   const labels = (solo() ? players : teams).slice(0, match.names.length);
   return `<div class="rematch">
-    <div class="match-actions"><button class="primary" type="button" id="rematch" aria-controls="rematch-form" aria-expanded="false">إعادة المباراة</button></div>
+    <div class="match-actions"><button class="primary" type="button" id="rematch" aria-controls="rematch-form" aria-expanded="false">إعادة المباراة</button>${solo() ? '' : '<button class="secondary" type="button" id="edit-members">تعديل أسماء الأعضاء</button>'}</div>
     <form id="rematch-form" aria-label="إعادة المباراة" hidden>
-      ${nameFields(labels, match.names)}
+      ${nameFields(labels, match.names, solo() ? undefined : match.members ?? [])}
       <div class="controls">
         <button class="primary" type="submit">تأكيد إعادة المباراة</button>
         <button class="secondary" type="button" id="cancel-rematch">إلغاء</button>
@@ -521,7 +560,7 @@ function renderSetupFields() {
   count.parentElement.hidden = !options;
   count.disabled = !options;
   const labels = setupMode === 'solo' ? players : teams;
-  document.querySelector('#setup-names').innerHTML = nameFields(labels.slice(0, setupCount), setupNames);
+  document.querySelector('#setup-names').innerHTML = nameFields(labels.slice(0, setupCount), setupNames, setupMode === 'teams' ? setupMembers : undefined);
   const jokerSelect = document.querySelector('#setup-jokers');
   const chooseJokers = setupMode === 'teams' && setupCount === 2;
   jokerSelect.parentElement.hidden = !chooseJokers;
@@ -637,6 +676,7 @@ app.addEventListener('change', ({ target }) => {
       setupMode = target.value;
       setupCount = 0;
       setupNames = [];
+      setupMembers = [];
     } else {
       setupCount = Number(target.value);
     }
@@ -710,7 +750,11 @@ app.addEventListener('input', ({ target }) => {
     rememberDraft();
   } else if (target.matches('#setup-form input, #rematch-form input')) {
     target.setCustomValidity('');
-    if (target.form.id === 'setup-form') setupNames[Number(target.name.split('-')[1])] = target.value;
+    if (target.form.id === 'setup-form') {
+      const [field, index, seat] = target.name.split('-');
+      if (field === 'member') (setupMembers[index] ??= [])[seat] = target.value;
+      else setupNames[index] = target.value;
+    }
   }
 });
 
@@ -721,7 +765,7 @@ app.addEventListener('submit', async event => {
   if (rematch || event.target.id === 'setup-form') {
     if (rematch && event.target.hidden) return;
     const mode = rematch ? matchConfig(match).mode : setupMode;
-    const inputs = [...event.target.querySelectorAll('input')];
+    const inputs = [...event.target.querySelectorAll('[name^="participant-"]')];
     if (!setupOptions[mode]?.some(([count]) => count === inputs.length)) return;
     const invalid = inputs.find(input => !input.value.trim());
     if (invalid) {
@@ -731,9 +775,9 @@ app.addEventListener('submit', async event => {
     }
     const jokers = rematch ? match.jokers : Number(document.querySelector('#setup-jokers').value);
     if (!rematch && mode === 'teams' && inputs.length === 2 && jokers !== 2 && jokers !== 3) return;
-    if (rematch && (liveBusy || (sharedId && !await endSharing()))) return;
-    liveMessage = '';
-    persist({ id: crypto.randomUUID(), mode, names: inputs.map(input => input.value.trim()), rounds: [], ...(jokers ? { jokers } : {}) });
+    if (liveBusy) return;
+    if (!sharedId) liveMessage = '';
+    persist({ id: crypto.randomUUID(), mode, names: inputs.map(input => input.value.trim()), members: mode === 'teams' ? readMembers(event.target, inputs.length) : undefined, rounds: [], ...(jokers ? { jokers } : {}) });
     editing = null;
     manualIndex = null;
     draft = blank();
@@ -785,6 +829,8 @@ app.addEventListener('click', ({ target }) => {
       liveKabru = draw;
       syncSharing();
     } : undefined, liveNow);
+  } else if (button.id === 'edit-members') {
+    editNames(true);
   } else if (button.id === 'rematch') {
     showRematch(document.querySelector('#rematch-form').hidden);
   } else if (button.id === 'cancel-rematch') {
@@ -840,16 +886,16 @@ app.addEventListener('click', ({ target }) => {
   }
 });
 
-reset.addEventListener('click', async () => {
+reset.addEventListener('click', () => {
   if (watching || liveBusy) return;
   if (!confirm('هل تريد بدء مباراة جديدة؟ سيتم مسح الأسماء واللعبات الحالية.')) return;
-  if (sharedId && !await endSharing()) return;
-  liveMessage = '';
+  if (!sharedId) liveMessage = '';
   editing = null;
   manualIndex = null;
   setupMode = '';
   setupCount = 0;
   setupNames = [];
+  setupMembers = [];
   persist(null);
   draft = blank();
   refresh('#setup-mode');
@@ -1002,8 +1048,9 @@ if (watching) {
   }
   if (match) {
     persist({ ...match, id: match.id ?? crypto.randomUUID() });
-    restoreSharing();
-    if (configured) syncSharing();
   }
+  restoreSharing();
+  if (configured) syncSharing();
+  if (sharedId && !match) liveMessage = 'المشاركة المباشرة مفعّلة.';
   render();
 }

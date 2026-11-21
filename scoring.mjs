@@ -180,7 +180,7 @@ export function recordRound(rounds, round, index = rounds.length, config) {
 // Compare a fully scored next round with every opponent. Unentered down cards
 // and failed declarations are omitted from the forecast.
 export function scoreGaps(rounds, config, current = standings(rounds, config)) {
-  if (config.mode !== 'teams' || config.count !== 3 || current.complete || rounds.length < 2) return;
+  if (config.mode !== 'teams' || config.count !== 3 || current.complete || rounds.length < 3) return;
   const { totals } = current;
   const leaderTotal = Math.min(...totals);
   const positions = [0, 1, 2];
@@ -228,6 +228,12 @@ export function matchConfig(match) {
   return { mode: match.mode ?? 'teams', count: match.names.length, jokers: match.jokers };
 }
 
+export function validMembers(members, count) {
+  return Array.isArray(members) && members.length === count && members.every(team =>
+    Array.isArray(team) && team.length === 2 && team.every(name =>
+      typeof name === 'string' && name.length <= 40 && name === name.trim()));
+}
+
 export function saveMatch(storage, match) {
   storage.setItem(STORAGE_KEY, JSON.stringify({ ...match, ...standings(match.rounds, matchConfig(match)) }));
 }
@@ -240,10 +246,11 @@ export function loadMatch(storage) {
     const config = matchConfig(match);
     for (const round of match.rounds) scoreRound(round, config);
     if (standings(match.rounds, config).totals.some(total => !Number.isFinite(total))) return null;
-    const { names, rounds, mode, pending, id, endedAt, jokers } = match;
+    const { names, rounds, mode, pending, id, endedAt, jokers, members } = match;
     const redo = Array.isArray(match.redo) && rounds.length + match.redo.length <= 7 ? match.redo : [];
     for (const round of redo) scoreRound(round, config);
     return { names, rounds, ...(mode === undefined ? {} : { mode }), ...(pending ? { pending } : {}),
+      ...(config.mode === 'teams' && validMembers(members, names.length) ? { members } : {}),
       ...(jokers === 2 || jokers === 3 ? { jokers } : {}),
       ...(typeof id === 'string' ? { id } : {}),
       ...(Number.isFinite(endedAt) ? { endedAt } : {}),

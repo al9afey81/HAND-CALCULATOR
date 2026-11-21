@@ -622,3 +622,9 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   #victory-dialog::backdrop, .victory-cloud { animation: none; }
 }
+
+.member-fields { border: 0; margin: 0 0 8px; padding: 0; min-inline-size: 0; }
+.member-fields legend { font-weight: 700; }
+.score-members summary { cursor: pointer; }
+.score-members summary h3 { display: inline; }
+.score-members span { display: block; font-size: .85em; }

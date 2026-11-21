@@ -237,12 +237,12 @@ test('two-team games can cap winning and losing declarations at two jokers', () 
 test('three-team gaps choose the lowest scoring win including a necessary penalty', () => {
   const config = { mode: 'teams', count: 3 };
   const zero = { ...round(1), overrides: [0, 0, 0] };
-  const rounds = [zero, { ...round(1), overrides: [0, 490, 700] }];
+  const rounds = [zero, zero, { ...round(1), overrides: [0, 490, 700] }];
   assert.equal(scoreGaps(rounds.slice(1), config), undefined);
   assert.deepEqual(scoreGaps(rounds, config), [
     { gap: 0 }, { gap: 490, type: 1, penalty: 0 }, { gap: 700, type: 2 },
   ]);
-  assert.deepEqual(scoreGaps([zero, { ...round(1), overrides: [0, 460, 10] }], config)[1],
+  assert.deepEqual(scoreGaps([zero, zero, { ...round(1), overrides: [0, 460, 10] }], config)[1],
     { gap: 460, type: 1, penalty: 0 });
   assert.equal(scoreGaps(rounds, { mode: 'solo', count: 3 }), undefined);
 });
@@ -268,4 +268,15 @@ test('last-round advice prioritizes the lead, then second place, then eliminatio
     assert.deepEqual(forecast([0, 10000, 30000])[2], { gap: 30000, out: true });
     assert.equal(forecast([0, 10000, 30000])[1].out, undefined);
   }
+});
+
+test('saved team members are optional and persist without changing totals', () => {
+  let value;
+  const storage = { setItem: (_, data) => { value = data; }, getItem: () => value };
+  const match = { names: ['أ', 'ب', 'ج'], rounds: [round(1)], members: [['علي', ''], ['', ''], ['زيد', 'سالم']] };
+  saveMatch(storage, match);
+  assert.deepEqual(loadMatch(storage).members, match.members);
+  assert.deepEqual(standings(loadMatch(storage).rounds), standings(match.rounds));
+  saveMatch(storage, { ...match, members: ['invalid'] });
+  assert.equal(loadMatch(storage).members, undefined);
 });
