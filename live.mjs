@@ -1,5 +1,5 @@
 import { firebaseConfig } from './live-config.mjs?v=2.8.2';
-import { allowsDown, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.8.9';
+import { allowsDown, allowsPenalty, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.8.10';
 
 export const configured = Boolean(firebaseConfig?.databaseURL && firebaseConfig?.apiKey);
 export const validLiveId = id => /^[a-f0-9]{32}$/.test(id);
@@ -68,20 +68,20 @@ export function decodeLiveSnapshot(payload) {
       || !validScores(totals) || complete !== (scores.length >= limit) || !Array.isArray(winners)
       || winners.some(index => !Number.isInteger(index) || index < 0 || index >= count)
       || (complete ? !winners.length : winners.length)) throw new Error('Invalid live scores');
-  const validGaps = mode === 'teams' && count === 3 && !complete && scores.length >= 3
+  const validGaps = !complete && scores.length >= 3
     && Array.isArray(gaps) && gaps.length === count && gaps.every((entry, index) => {
       if (!entry || entry.gap !== Math.min(Number.MAX_VALUE, totals[index] - Math.min(...totals))) return false;
       const { type, penalty, table, out } = entry;
       if (table !== undefined || out !== undefined) {
-        const lastPlace = totals.filter(total => total < totals[index]).length === 2
-          && new Set(totals).size === count;
+        const lastPlace = count >= 3 && totals.filter(total => total < totals[index]).length === count - 1
+          && totals.filter(total => total === Math.min(...totals)).length === 1;
         if (!lastPlace || scores.length !== limit - 1 || (table !== undefined && table !== true)
             || (out !== undefined && out !== true)) return false;
       }
       if (type === undefined) return penalty === undefined && table === undefined;
       if (out !== undefined) return false;
       return entry.gap > 0 && Number.isInteger(type) && type >= 0 && type < HIND_ZAT
-        && (penalty === undefined || (type > 0 && Number.isInteger(penalty)
+        && (penalty === undefined || (allowsPenalty({ mode, count }) && type > 0 && Number.isInteger(penalty)
           && penalty >= 0 && penalty < count && penalty !== index));
     });
   if (kabru !== undefined) {

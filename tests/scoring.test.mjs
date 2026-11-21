@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cardValue, scoreGaps, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
+import { cardValue, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
 
 function round(type = 0, penalty = null, down = [[], [], []], winner = 0) {
   return { type, penalty, down, winner, ...(type === 2 ? { jokerCount: 1 } : {}) };
@@ -244,7 +244,7 @@ test('three-team gaps choose the lowest scoring win including a necessary penalt
   ]);
   assert.deepEqual(scoreGaps([zero, zero, { ...round(1), overrides: [0, 460, 10] }], config)[1],
     { gap: 460, type: 1, penalty: 0 });
-  assert.equal(scoreGaps(rounds, { mode: 'solo', count: 3 }), undefined);
+  assert.deepEqual(scoreGaps(rounds, { mode: 'solo', count: 3 })[1], { gap: 490, type: 2 });
 });
 
 test('gaps respect the last round, tied leaders, and the end of the match', () => {
@@ -279,4 +279,33 @@ test('saved team members are optional and persist without changing totals', () =
   assert.deepEqual(standings(loadMatch(storage).rounds), standings(match.rounds));
   saveMatch(storage, { ...match, members: ['invalid'] });
   assert.equal(loadMatch(storage).members, undefined);
+});
+
+test('two-team forecasts omit sherha and respect the configured joker count', () => {
+  const forecast = (gap, jokers) => {
+    const config = { mode: 'teams', count: 2, jokers };
+    const neutral = { winner: 0, type: 1, overrides: [0, 0] };
+    return scoreGaps([neutral, neutral, { ...neutral, overrides: [0, gap] }], config)[1];
+  };
+  assert.deepEqual(forecast(490, 2), { gap: 490, type: 2 });
+  assert.deepEqual(forecast(4600, 2), { gap: 4600 });
+  assert.deepEqual(forecast(4600, 3), { gap: 4600, type: 5 });
+});
+
+test('recommendation wording follows the mode and omits sherha for two teams', () => {
+  const names = ['الزعيم', 'محمد', 'النخبة'];
+  const entry = { gap: 490, type: 1, penalty: 0 };
+  const teams = { mode: 'teams', count: 3 };
+  const solo = { mode: 'solo', count: 3 };
+  assert.deepEqual(recommendationText(names, entry, teams, 0), {
+    advice: 'يبيلكم هند عادي وعطوا الشرهة للزعيم', chase: 'وتصيدون الزعيم',
+  });
+  assert.deepEqual(recommendationText(names, entry, solo, 0), {
+    advice: 'يبيلك هند عادي وعط الشرهة للزعيم', chase: 'وتصيد الزعيم',
+  });
+  assert.equal(recommendationText(names, entry, { mode: 'teams', count: 2 }).advice, 'يبيلكم هند عادي');
+  assert.equal(recommendationText(names, { ...entry, table: true }, teams).advice, 'إذا بتلعبون، هند عادي وعطوا الشرهة للزعيم 😏');
+  assert.equal(recommendationText(names, { ...entry, table: true }, solo).advice, 'إذا بتلعب، هند عادي وعط الشرهة للزعيم 😏');
+  assert.match(recommendationText(names, { out: true }, teams).advice, /روحوا تفرجوا/);
+  assert.match(recommendationText(names, { out: true }, solo).advice, /روح تفرج/);
 });

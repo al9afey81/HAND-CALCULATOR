@@ -180,13 +180,15 @@ export function recordRound(rounds, round, index = rounds.length, config) {
 // Compare a fully scored next round with every opponent. Unentered down cards
 // and failed declarations are omitted from the forecast.
 export function scoreGaps(rounds, config, current = standings(rounds, config)) {
-  if (config.mode !== 'teams' || config.count !== 3 || current.complete || rounds.length < 3) return;
+  if (current.complete || rounds.length < 3) return;
   const { totals } = current;
   const leaderTotal = Math.min(...totals);
-  const positions = [0, 1, 2];
+  const positions = participants(config);
+  const penaltyAllowed = allowsPenalty(config);
   const lastRound = rounds.length === current.limit - 1;
   const types = TYPES.map((rule, type) => ({ ...rule, type }))
-    .filter(({ type }) => type !== HIND_ZAT && (type !== 0 || allowsKhalasa(rounds, rounds.length)))
+    .filter(({ type, jokers }) => type !== HIND_ZAT && (type !== 0 || allowsKhalasa(rounds, rounds.length))
+      && (jokers === null || jokers <= jokerLimit(config)))
     .sort((a, b) => a.factor - b.factor);
 
   return totals.map((total, winner) => {
@@ -195,11 +197,11 @@ export function scoreGaps(rounds, config, current = standings(rounds, config)) {
 
     const opponents = positions.filter(index => index !== winner)
       .sort((a, b) => totals[a] - totals[b]);
-    const canStay = lastRound && opponents.every(index => totals[index] < total)
+    const canStay = lastRound && opponents.length >= 2 && opponents.every(index => totals[index] < total)
       && totals[opponents[0]] < totals[opponents[1]];
     let tableWin;
     for (const { type, factor } of types) {
-      for (const penalty of factor > 1 ? [null, ...opponents] : [null]) {
+      for (const penalty of penaltyAllowed && factor > 1 ? [null, ...opponents] : [null]) {
         const round = { winner, type, penalty, ...(type === 2 ? { jokerCount: 0 } : {}) };
         try {
           const next = standings(recordRound(rounds, round, rounds.length, config), config);
@@ -216,6 +218,28 @@ export function scoreGaps(rounds, config, current = standings(rounds, config)) {
     }
     return tableWin ?? { gap, ...(canStay ? { out: true } : {}) };
   });
+}
+
+export function recommendationText(names, entry, config, leader) {
+  const plural = config.mode === 'teams';
+  if (entry.out) {
+    return { advice: plural ? 'يمدحون التيك توك، روحوا تفرجوا عليه 🤣' : 'يمدحون التيك توك، روح تفرج عليه 🤣' };
+  }
+  if (entry.type === undefined) {
+    return { advice: `ما يكفي${plural ? 'كم' : 'ك'} فوز واحد بالنقاط لتجاوز المتصدر` };
+  }
+
+  const recipient = allowsPenalty(config) ? names[entry.penalty] : undefined;
+  const penalty = recipient
+    ? ` و${plural ? 'عطوا' : 'عط'} الشرهة ${recipient.startsWith('ال') ? 'ل' + recipient.slice(1) : 'لـ' + recipient}`
+    : '';
+  const ordinaryStay = entry.table && entry.type === 1;
+  const intro = ordinaryStay ? (plural ? 'إذا بتلعبون،' : 'إذا بتلعب،') : (plural ? 'يبيلكم' : 'يبيلك');
+  const advice = `${intro} ${TYPES[entry.type].label}${penalty}${ordinaryStay ? ' 😏' : ''}`;
+  const chase = !entry.table && leader !== undefined
+    ? `وتصيد${plural ? 'ون' : ''} ${names[leader]}`
+    : '';
+  return { advice, chase };
 }
 
 export function removeRound(rounds, index = rounds.length - 1) {

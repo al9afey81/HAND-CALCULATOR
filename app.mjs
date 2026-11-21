@@ -1,7 +1,7 @@
-import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.9';
+import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.10';
 import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.8.2';
 import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
-import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.9';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.10';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -251,24 +251,11 @@ function recommendations(totals, gaps) {
   let namedLeader = false;
   return gaps.map((entry, team) => {
     if (entry.gap === 0) return '';
-    let advice;
-    let chase = '';
-    if (entry.out) {
-      advice = 'الانسحاب طيب 😂';
-    } else if (entry.type === undefined) {
-      advice = 'لا يكفي فوز واحد بالنقاط لتجاوز المتصدر';
-    } else {
-      const recipient = match.names[entry.penalty];
-      const penalty = recipient ? ` وعط الشرهة ${recipient.startsWith('ال') ? 'ل' + recipient.slice(1) : 'لـ' + recipient}` : '';
-      if (!entry.table && !namedLeader) chase = `وتصيد ${match.names[leader]}`;
-      const ordinaryStay = entry.table && entry.type === 1;
-      advice = ordinaryStay
-        ? `إذا بتلعب، هند عادي${penalty} 😏`
-        : `يبيلك ${TYPES[entry.type].label}${penalty}`;
-      if (!entry.table) namedLeader = true;
-    }
+    const { advice, chase } = recommendationText(match.names, entry, matchConfig(match),
+      namedLeader ? undefined : leader);
+    if (chase) namedLeader = true;
     const chaseText = chase ? ` <span class="score-advice-chase">${escape(chase)}</span>` : '';
-    return `<div>${escape(match.names[team])}: ${escape(advice)}${chaseText}</div>`;
+    return `<div>يا ${escape(match.names[team])}، ${escape(advice)}${chaseText}</div>`;
   }).join('');
 }
 

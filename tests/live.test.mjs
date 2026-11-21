@@ -104,3 +104,19 @@ test('optional team members travel with the live snapshot without affecting scor
   assert.deepEqual(decodeLiveSnapshot(JSON.stringify(snapshot)), { ...original, members });
   assert.deepEqual(decodeLiveSnapshot(JSON.stringify({ ...snapshot, members: [['invalid']] })), original);
 });
+
+test('viewers receive two-team and solo recommendations without enabling two-team penalty', () => {
+  for (const [mode, count] of [['teams', 2], ['solo', 4]]) {
+    const names = ['أ', 'ب', 'ج', 'د'].slice(0, count);
+    const neutral = { ...round(count), overrides: names.map(() => 0) };
+    const match = { mode, names, rounds: [neutral, neutral, { ...neutral, overrides: [0, 490, 700, 800].slice(0, count) }] };
+    const snapshot = liveSnapshot(match);
+    assert.ok(snapshot.gaps?.[1].type > 0);
+    assert.deepEqual(decodeLiveSnapshot(JSON.stringify(snapshot)).gaps, snapshot.gaps);
+    if (count === 2) {
+      assert.equal(snapshot.gaps[1].penalty, undefined);
+      snapshot.gaps[1].penalty = 0;
+      assert.equal(decodeLiveSnapshot(JSON.stringify(snapshot)).gaps, undefined);
+    }
+  }
+});
