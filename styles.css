@@ -628,3 +628,40 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 .score-members summary { cursor: pointer; }
 .score-members summary h3 { display: inline; }
 .score-members span { display: block; font-size: .85em; }
+.rematch-members { margin-block: 6px; }
+.rematch-members summary { cursor: pointer; font-weight: 700; }
+.rematch-members > label { display: flex; align-items: center; gap: 6px; }
+.rematch-members input[type="radio"] { min-height: auto; width: auto; }
+
+.live-viewer .edition-panel { width: var(--viewer-logo-size, min(100%, 850px)); }
+.live-viewer main { padding-block: clamp(6px, 1vh, 14px); }
+.live-viewer .scoreboard { margin-bottom: 8px; }
+.live-viewer .history-panel th, .live-viewer .history-panel td { padding: 4px 3px; line-height: 1.4; }
+.live-viewer .history-panel .points { font-size: clamp(16px, 2.1vw, 26px); }
+.live-viewer .history-panel h2 { margin-bottom: 4px; }
+.live-viewer .masthead-top { min-height: clamp(36px, 7vh, 90px); }
+.live-viewer .masthead h1 { font-size: clamp(17px, min(5vw, 5vh), 52px); }
+
+.live-viewer[data-viewer-density="compact"] .scoreboard,
+.live-viewer[data-viewer-density="tight"] .scoreboard,
+.live-viewer[data-viewer-density="compact"] .history-panel,
+.live-viewer[data-viewer-density="tight"] .history-panel,
+.live-viewer[data-viewer-density="compact"] .final,
+.live-viewer[data-viewer-density="tight"] .final { padding: 7px; }
+.live-viewer[data-viewer-density="compact"] .score-title,
+.live-viewer[data-viewer-density="tight"] .score-title { margin-bottom: 5px; }
+.live-viewer[data-viewer-density="compact"] .final .scores,
+.live-viewer[data-viewer-density="tight"] .final .scores { display: none; }
+.live-viewer[data-viewer-density="compact"] .history-panel th,
+.live-viewer[data-viewer-density="compact"] .history-panel td { padding-block: 2px; }
+.live-viewer[data-viewer-density="tight"] .history-panel th,
+.live-viewer[data-viewer-density="tight"] .history-panel td { padding-block: 1px; }
+.live-viewer[data-viewer-density="tight"] .history-panel .points { font-size: clamp(16px, 1.7vw, 21px); }
+.live-viewer[data-viewer-density="tight"] .score-card { padding-block: 3px; }
+.live-viewer[data-viewer-density="tight"] .score-card b { font-size: clamp(19px, 3vw, 31px); }
+.live-viewer[data-viewer-density="tight"] .score-advice { font-size: clamp(14px, 1.5vw, 20px); }
+.live-viewer .version { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+.live-viewer[data-viewer-density="tight"] .masthead-top { min-height: 38px; }
+.live-viewer[data-viewer-density="tight"] main { padding-block: 5px; }
+.live-viewer[data-viewer-density="tight"] .history-panel th,
+.live-viewer[data-viewer-density="tight"] .history-panel td { line-height: 1.25; }
