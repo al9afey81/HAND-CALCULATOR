@@ -120,3 +120,24 @@ test('viewers receive two-team and solo recommendations without enabling two-tea
     }
   }
 });
+
+test('live payload reflects actual extensions and a new match resets the limit', () => {
+  const match = { mode: 'teams', names: ['أ', 'ب', 'ج'], rounds: [] };
+  const view = snapshot => decodeLiveSnapshot(JSON.stringify(snapshot));
+  const initial = view(liveSnapshot(match));
+  assert.equal(initial.limit, 5);
+  const extended = view(liveSnapshot({ ...match, rounds: [round(3, 2)] }));
+  assert.equal(extended.limit, 7);
+  const extendedToNine = view({ ...extended, limit: 9, scores: Array.from({ length: 8 }, () => [0, 0, 0]) });
+  assert.equal(extendedToNine.limit, 9);
+  assert.equal(extendedToNine.scores.length, 8);
+  assert.equal(view({ ...extendedToNine, scores: Array.from({ length: 9 }, () => [0, 0, 0]), complete: true, winners: [0] }).scores.length, 9);
+  assert.equal(view(liveSnapshot(match)).limit, 5);
+});
+
+test('an early Hind Zat retains the scheduled row count', () => {
+  const match = { mode: 'teams', names: ['أ', 'ب', 'ج'], rounds: [round(3, 2), round(3, HIND_ZAT)] };
+  const snapshot = decodeLiveSnapshot(JSON.stringify(liveSnapshot(match)));
+  assert.equal(snapshot.limit, 2);
+  assert.equal(snapshot.scheduledLimit, 7);
+});

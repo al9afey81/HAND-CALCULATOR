@@ -1,4 +1,4 @@
-import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.10';
+import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.12';
 import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.8.2';
 import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
 import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.10';
@@ -1013,7 +1013,7 @@ function renderLiveMatch(snapshot) {
   }
   const { names, scores, totals, limit, complete, winners, reason } = snapshot;
   if (!complete && victory.open) victory.close();
-  const rows = Array.from({ length: Math.max(7, scores.length) }, (_, index) =>
+  const rows = Array.from({ length: snapshot.scheduledLimit ?? limit }, (_, index) =>
     `<tr><th scope="row">${number.format(index + 1)}${reason === 'hind-zat' && index === limit - 1 ? ' <small>هند زات</small>' : ''}${index >= limit && scores[index] ? ' <small class="subtle">معلّقة</small>' : ''}</th>
       ${names.map((_, position) => `<td>${scores[index] ? display(scores[index][position]) : '—'}</td>`).join('')}</tr>`).join('');
   app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">

@@ -48,26 +48,29 @@ export function liveSnapshot(match, kabru) {
   const current = standings(match.rounds, config);
   const { limit, totals, complete, winners, reason } = current;
   const gaps = scoreGaps(match.rounds, config, current);
+  const scheduledLimit = roundLimit(match.rounds);
   return {
     ...(config.mode === 'teams' && validMembers(match.members, config.count) ? { members: match.members } : {}),
-    mode: config.mode, names: match.names, limit, totals, complete, winners, ...(reason ? { reason } : {}),
+    mode: config.mode, names: match.names, limit, totals, complete, winners, ...(reason ? { reason, scheduledLimit } : {}),
     ...(kabru ? { kabru } : {}), ...(gaps ? { gaps } : {}),
-    scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, roundLimit(match.rounds)))),
+    scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, scheduledLimit))),
   };
 }
 
 export function decodeLiveSnapshot(payload) {
-  const { mode, names, limit, scores, totals, complete, winners, reason, kabru, gaps, members } = JSON.parse(payload);
+  const { mode, names, limit, scores, totals, complete, winners, reason, scheduledLimit, kabru, gaps, members } = JSON.parse(payload);
   const count = names?.length;
+  const supportedLimits = [5, 7, 9];
   const validScores = values => Array.isArray(values) && values.length === count && values.every(Number.isFinite);
   if (!Array.isArray(names) || !names.every(name => typeof name === 'string' && name.trim() && name.length <= 40)
       || !(mode === 'solo' ? count >= 3 && count <= 5 : mode === 'teams' && (count === 2 || count === 3))
       || (reason === 'hind-zat'
-        ? !Number.isInteger(limit) || limit < 1 || limit > 7 || complete !== true || winners?.length !== 1
-        : reason !== undefined || ![5, 7].includes(limit)) || !Array.isArray(scores) || scores.length > 7 || !scores.every(validScores)
+        ? !Number.isInteger(limit) || limit < 1 || limit > 9 || complete !== true || winners?.length !== 1
+        : reason !== undefined || !supportedLimits.includes(limit)) || !Array.isArray(scores) || scores.length > 9 || !scores.every(validScores)
       || !validScores(totals) || complete !== (scores.length >= limit) || !Array.isArray(winners)
       || winners.some(index => !Number.isInteger(index) || index < 0 || index >= count)
       || (complete ? !winners.length : winners.length)) throw new Error('Invalid live scores');
+  const validSchedule = reason === 'hind-zat' && supportedLimits.includes(scheduledLimit) && scheduledLimit >= limit;
   const validGaps = !complete && scores.length >= 3
     && Array.isArray(gaps) && gaps.length === count && gaps.every((entry, index) => {
       if (!entry || entry.gap !== Math.min(Number.MAX_VALUE, totals[index] - Math.min(...totals))) return false;
@@ -99,7 +102,8 @@ export function decodeLiveSnapshot(payload) {
   }
   return { mode, names, limit, scores, totals, complete, winners,
     ...(mode === 'teams' && validMembers(members, count) ? { members } : {}),
-    ...(reason ? { reason } : {}), ...(kabru ? { kabru } : {}), ...(validGaps ? { gaps } : {}) };
+    ...(reason ? { reason, scheduledLimit: validSchedule ? scheduledLimit
+      : supportedLimits.find(size => size >= scores.length) } : {}), ...(kabru ? { kabru } : {}), ...(validGaps ? { gaps } : {}) };
 
 }
 
