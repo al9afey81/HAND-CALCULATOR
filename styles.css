@@ -633,7 +633,7 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 .rematch-members > label { display: flex; align-items: center; gap: 6px; }
 .rematch-members input[type="radio"] { min-height: auto; width: auto; }
 
-.live-viewer .edition-panel { width: var(--viewer-logo-size, min(100%, 850px)); }
+.live-viewer .edition-panel { width: 100%; max-width: 850px; }
 .live-viewer main { padding-block: clamp(6px, 1vh, 14px); }
 .live-viewer .scoreboard { margin-bottom: 8px; }
 .live-viewer .history-panel th, .live-viewer .history-panel td { padding: 4px 3px; line-height: 1.4; }
@@ -736,20 +736,25 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
   overflow-wrap: anywhere;
 }
 .live-viewer .edition-panel.custom-edition {
-  container-type: inline-size;
-  min-height: 36px;
-  padding: 4px clamp(8px, 1.5vw, 18px);
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 4px 12px;
+  overflow: visible;
 }
 .live-viewer #edition-name {
+  display: block;
+  flex: 0 0 100%;
   width: 100%;
-  min-width: 0;
-  font-size: clamp(12px, min(4vw, 4vh), 40px);
-  font-size: clamp(12px, min(10cqi, 4vh), 40px);
+  min-width: 100%;
+  font-size: 16px;
   line-height: 1.6;
-  overflow: hidden;
   white-space: nowrap;
-  text-overflow: ellipsis;
+  word-break: normal;
+  word-wrap: normal;
+  overflow-wrap: normal;
+  overflow: visible;
   text-align: center;
 }
 

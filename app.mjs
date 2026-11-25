@@ -1053,11 +1053,25 @@ function scheduleViewerFit() {
     const body = document.body;
     const footer = document.querySelector('.version');
     const logo = document.querySelector('.edition-panel');
+    const label = logo.querySelector('#edition-name');
     body.dataset.viewerDensity = 'comfortable';
-    logo.style.removeProperty('--viewer-logo-size');
+    logo.style.removeProperty('width');
     const naturalWidth = logo.getBoundingClientRect().width;
-    const smallLogoWidth = Math.min(180, naturalWidth);
-    const setLogoWidth = width => logo.style.setProperty('--viewer-logo-size', `${width}px`);
+    logo.style.width = Math.min(180, naturalWidth) + 'px';
+    if (!label.hidden) label.style.fontSize = '14px';
+    const minimumWidth = label.hidden ? 88 : Math.max(124, logo.offsetWidth - label.clientWidth + label.scrollWidth);
+    const smallLogoWidth = Math.min(naturalWidth, Math.max(180, minimumWidth));
+    const setLogoWidth = width => {
+      logo.style.width = width + 'px';
+      if (label.hidden) return;
+      // Measure the rendered name so older TV browsers do not need container query units.
+      let fontSize = Math.max(12, Math.min(40, Math.floor(width / 10), Math.floor(height / 25)));
+      label.style.fontSize = fontSize + 'px';
+      while (label.scrollWidth > label.clientWidth && fontSize > 1) {
+        fontSize = Math.max(1, Math.min(fontSize - 1, Math.floor(fontSize * label.clientWidth / label.scrollWidth)));
+        label.style.fontSize = fontSize + 'px';
+      }
+    };
     const pageBottom = () => footer.getBoundingClientRect().bottom + window.scrollY;
 
     for (const density of ['comfortable', 'compact', 'tight']) {
@@ -1071,7 +1085,6 @@ function scheduleViewerFit() {
     }
     const remaining = height - pageBottom() + logo.getBoundingClientRect().height;
     const availableWidth = Math.floor(remaining * 1672 / 324);
-    const minimumWidth = logo.classList.contains('custom-edition') ? 124 : 88;
     setLogoWidth(Math.min(naturalWidth, Math.max(minimumWidth, availableWidth)));
   });
 }
