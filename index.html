@@ -3,21 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="calculator-version" content="2.8.12">
+  <meta name="calculator-version" content="2.9.1">
   <meta name="theme-color" content="#123e31">
   <meta name="description" content="حساب نقاط لعبة الهند للأفرقة واللعب الفردي.">
   <title>حاسبة الهند – النخبة</title>
-  <link rel="stylesheet" href="./styles.css?v=2.8.11">
+  <link rel="stylesheet" href="./styles.css?v=2.9.1">
 </head>
 <body>
   <header class="masthead">
     <div class="masthead-inner">
       <div class="masthead-top">
-        <button id="check-update" type="button" aria-label="التحقق من تحديث الحاسبة" title="التحقق من تحديث الحاسبة" hidden>↻</button>
+        <div class="header-tools">
+          <details id="settings-menu">
+            <summary aria-label="القائمة">☰</summary>
+            <button id="settings-open" class="secondary" type="button">الإعدادات</button>
+          </details>
+          <button id="check-update" type="button" aria-label="التحقق من تحديث الحاسبة" title="التحقق من تحديث الحاسبة" hidden>↻</button>
+        </div>
         <h1><span aria-hidden="true">♠</span> حاسبة الهند <span aria-hidden="true">♠</span></h1>
         <button id="reset" class="reset" type="button" hidden>مباراة جديدة <span aria-hidden="true">+</span></button>
       </div>
-      <div class="edition-panel" role="img" aria-label="النخبة"></div>
+      <div class="edition-panel" role="img" aria-label="النخبة"><bdi id="edition-name" hidden></bdi></div>
     </div>
   </header>
   <aside class="update-banner shell" id="update-banner" hidden>
@@ -44,6 +50,34 @@
       </div>
     </form>
   </dialog>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <form id="settings-form" class="panel">
+      <div class="panel-heading"><h2 id="settings-title">الإعدادات</h2>
+        <button id="settings-close" class="secondary" type="button">إغلاق</button></div>
+      <label>اسم الديوانية<input name="name" maxlength="40" dir="auto" required></label>
+      <fieldset id="settings-themes">
+        <legend>الثيم</legend>
+        <div id="theme-options"></div>
+      </fieldset>
+      <p id="settings-lock" class="subtle" hidden>يمكن تعديل قوانين اللعب بعد انتهاء القيد الجاري.</p>
+      <fieldset id="settings-rules">
+        <legend>قوانين اللعب</legend>
+        <label>عدد اللعبات الأساسي<select name="baseRounds">
+          <option value="5">خمس لعبات</option>
+          <option value="7">سبع لعبات</option>
+        </select></label>
+        <label>عدد الجياكر<select name="jokers">
+          <option value="2">جيكرين</option><option value="3">ثلاث جياكر</option>
+        </select></label>
+        <label class="settings-check"><input type="checkbox" name="penaltyEnabled">تفعيل الشرهة</label>
+        <p class="subtle">تُطبّق الشرهة في الأنظمة التي تدعمها. مباراة الفريقين تبقى بلا شرهة.</p>
+      </fieldset>
+      <div class="controls">
+        <button class="primary" type="submit">حفظ الإعدادات</button>
+        <button id="settings-defaults" class="secondary" type="button">استعادة الإعدادات الافتراضية</button>
+      </div>
+    </form>
+  </dialog>
   <main id="app" class="shell"></main>
   <div class="archive-launch shell"><button id="archive-open" class="secondary" type="button">سجل المباريات</button></div>
   <dialog id="archive-dialog" aria-labelledby="archive-title">
@@ -53,7 +87,7 @@
       <div id="archive-content"></div>
     </section>
   </dialog>
-  <footer class="version">الإصدار <bdi>2.8.12</bdi></footer>
+  <footer class="version">الإصدار <bdi>2.9.1</bdi></footer>
   <div id="notice" role="status" aria-live="polite"></div>
   <dialog id="kabru-dialog" aria-labelledby="kabru-title">
     <div class="kabru-screen">
@@ -76,7 +110,7 @@
       </div>
     </div>
   </dialog>
-  <script type="module" src="./app.mjs?v=2.8.12"></script>
+  <script type="module" src="./app.mjs?v=2.9.1"></script>
   <script type="module" src="./updates.mjs?v=2.8.2"></script>
   <!-- Cloudflare Web Analytics -->
   <script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "cd0bcb47a03946d9a38bb46c95271505"}'></script>

@@ -54,8 +54,8 @@ export const FAILED_DECLARATIONS = [
   { label: 'ثلاث جواكر ولون', jokers: 3, units: 4 },
 ];
 
-export function jokerLimit({ mode, count, jokers } = {}) {
-  return mode === 'teams' && count === 2 && jokers === 2 ? 2 : 3;
+export function jokerLimit({ jokers } = {}) {
+  return jokers === 2 ? 2 : 3;
 }
 
 export function jokerCapacity(round, config) {
@@ -75,12 +75,13 @@ export function declaredJokers(round, except) {
     index === round.winner || index === except ? sum : sum + (FAILED_DECLARATIONS[declaration]?.jokers ?? 0), 0);
 }
 
-export function roundLimit(rounds) {
-  return rounds.some(round => TYPES[round.type]?.factor >= 4) ? 7 : 5;
+export function roundLimit(rounds, { baseRounds } = {}) {
+  const base = baseRounds === 7 ? 7 : 5;
+  return base + (rounds.some(round => TYPES[round.type]?.factor >= 4) ? 2 : 0);
 }
 
-export function allowsKhalasa(rounds, index) {
-  const limit = roundLimit(rounds.filter((_, position) => position !== index));
+export function allowsKhalasa(rounds, index, config) {
+  const limit = roundLimit(rounds.filter((_, position) => position !== index), config);
   return index !== limit - 1;
 }
 
@@ -94,8 +95,8 @@ function participants({ mode = 'teams', count = 3 } = {}) {
   return Array.from({ length: count }, (_, index) => index);
 }
 
-export function allowsPenalty({ mode = 'teams', count = 3 } = {}) {
-  return mode !== 'teams' || count !== 2;
+export function allowsPenalty({ mode = 'teams', count = 3, penaltyEnabled = true } = {}) {
+  return penaltyEnabled && (mode !== 'teams' || count !== 2);
 }
 
 export function scoreRound(round, config, downAllowed = true) {
@@ -136,7 +137,7 @@ export function scoreRound(round, config, downAllowed = true) {
 
 export function standings(rounds, config) {
   const positions = participants(config);
-  const scoringLimit = roundLimit(rounds);
+  const scoringLimit = roundLimit(rounds, config);
   const zatIndex = rounds.findIndex(round => round.type === HIND_ZAT);
   const limit = zatIndex === -1 ? scoringLimit : zatIndex + 1;
   const active = rounds.slice(0, limit);
@@ -152,7 +153,7 @@ export function recordRound(rounds, round, index = rounds.length, config) {
       || (index === rounds.length && standings(rounds, config).complete)) {
     throw new Error('لا يمكن إضافة هذه اللعبة.');
   }
-  if (round.type === 0 && !allowsKhalasa(rounds, index)) {
+  if (round.type === 0 && !allowsKhalasa(rounds, index, config)) {
     throw new Error('لا يمكن اعتماد الخالصة في اللعبة الأخيرة.');
   }
   const updated = rounds.slice();
@@ -168,7 +169,7 @@ export function recordRound(rounds, round, index = rounds.length, config) {
     }
   }
   updated[index] = round;
-  const downAllowed = allowsDown(index, roundLimit(updated));
+  const downAllowed = allowsDown(index, roundLimit(updated, config));
   updated[index] = downAllowed ? round : { ...round, down: participants(config).map(() => []) };
   scoreRound(updated[index], config, downAllowed);
   if (standings(updated, config).totals.some(total => !Number.isFinite(total))) {
@@ -187,7 +188,7 @@ export function scoreGaps(rounds, config, current = standings(rounds, config)) {
   const penaltyAllowed = allowsPenalty(config);
   const lastRound = rounds.length === current.limit - 1;
   const types = TYPES.map((rule, type) => ({ ...rule, type }))
-    .filter(({ type, jokers }) => type !== HIND_ZAT && (type !== 0 || allowsKhalasa(rounds, rounds.length))
+    .filter(({ type, jokers }) => type !== HIND_ZAT && (type !== 0 || allowsKhalasa(rounds, rounds.length, config))
       && (jokers === null || jokers <= jokerLimit(config)))
     .sort((a, b) => a.factor - b.factor);
 
@@ -249,7 +250,10 @@ export function removeRound(rounds, index = rounds.length - 1) {
 export const STORAGE_KEY = 'hind-calculator.v1';
 
 export function matchConfig(match) {
-  return { mode: match.mode ?? 'teams', count: match.names.length, jokers: match.jokers };
+  return {
+    mode: match.mode ?? 'teams', count: match.names.length, jokers: match.jokers,
+    baseRounds: match.baseRounds, penaltyEnabled: match.penaltyEnabled,
+  };
 }
 
 export function validMembers(members, count) {
@@ -266,16 +270,20 @@ export function loadMatch(storage) {
   try {
     const match = JSON.parse(storage.getItem(STORAGE_KEY));
     if (!Array.isArray(match?.names) || !match.names.every(name => typeof name === 'string' && name.trim())
-        || !Array.isArray(match.rounds) || match.rounds.length > 7) return null;
+        || !Array.isArray(match.rounds)) return null;
     const config = matchConfig(match);
+    const maxRounds = roundLimit([{ type: 2 }], config);
+    if (match.rounds.length > maxRounds) return null;
     for (const round of match.rounds) scoreRound(round, config);
     if (standings(match.rounds, config).totals.some(total => !Number.isFinite(total))) return null;
-    const { names, rounds, mode, pending, id, endedAt, jokers, members } = match;
-    const redo = Array.isArray(match.redo) && rounds.length + match.redo.length <= 7 ? match.redo : [];
+    const { names, rounds, mode, pending, id, endedAt, jokers, members, baseRounds, penaltyEnabled } = match;
+    const redo = Array.isArray(match.redo) && rounds.length + match.redo.length <= maxRounds ? match.redo : [];
     for (const round of redo) scoreRound(round, config);
     return { names, rounds, ...(mode === undefined ? {} : { mode }), ...(pending ? { pending } : {}),
       ...(config.mode === 'teams' && validMembers(members, names.length) ? { members } : {}),
       ...(jokers === 2 || jokers === 3 ? { jokers } : {}),
+      ...(baseRounds === 5 || baseRounds === 7 ? { baseRounds } : {}),
+      ...(typeof penaltyEnabled === 'boolean' ? { penaltyEnabled } : {}),
       ...(typeof id === 'string' ? { id } : {}),
       ...(Number.isFinite(endedAt) ? { endedAt } : {}),
       ...(redo.length ? { redo } : {}) };

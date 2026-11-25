@@ -1,7 +1,8 @@
-import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.8.12';
-import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.8.2';
+import { DEFAULT_SETTINGS, THEMES, loadSettings, matchRules, normalizeBrand, saveSettings } from './settings.mjs?v=2.9.1';
+import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.9.1';
+import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.9.1';
 import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
-import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.8.10';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.9.1';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -47,6 +48,7 @@ const blank = () => ({ winner: null, type: null, penalty: null, down: match ? po
 
 let storage;
 try { storage = window.localStorage; } catch {}
+let settings = loadSettings(storage);
 let match = watching ? null : loadMatch(storage);
 let editing = match?.pending?.editing ?? null;
 let draft = match?.pending?.draft ?? blank();
@@ -107,7 +109,7 @@ function syncSharing() {
   const id = sharedId;
   liveMessage = 'جارٍ مزامنة القيد…';
   renderSharing();
-  publishLive(id, JSON.stringify(liveSnapshot(match, liveKabru))).then(() => {
+  publishLive(id, JSON.stringify(liveSnapshot(match, liveKabru, settings))).then(() => {
     if (version !== publishVersion || sharedId !== id || liveBusy) return;
     liveMessage = 'المشاركة المباشرة مفعّلة.';
     renderSharing();
@@ -134,7 +136,7 @@ liveStart.addEventListener('click', async () => {
   const id = crypto.randomUUID().replaceAll('-', '');
   try {
     storage.setItem(liveKey, id);
-    await createLive(id, JSON.stringify(liveSnapshot(match)));
+    await createLive(id, JSON.stringify(liveSnapshot(match, undefined, settings)));
     sharedId = id;
   } catch {
     try { storage.removeItem(liveKey); } catch {}
@@ -234,7 +236,7 @@ function draftAllowsDown() {
   const index = editing ?? match.rounds.length;
   const rounds = match.rounds.slice();
   rounds[index] = draft;
-  return allowsDown(index, roundLimit(rounds));
+  return allowsDown(index, roundLimit(rounds, matchConfig(match)));
 }
 
 function matchStandings(rounds = match.rounds) {
@@ -296,7 +298,7 @@ function history(limit, totals) {
   const overflow = match.rounds.length > limit;
   const rows = Array.from({ length: Math.max(limit, match.rounds.length) }, (_, index) => {
     const round = match.rounds[index];
-    const scores = round ? scoreRound(round, matchConfig(match), allowsDown(index, roundLimit(match.rounds))).map(display) : positions().map(() => '—');
+    const scores = round ? scoreRound(round, matchConfig(match), allowsDown(index, roundLimit(match.rounds, matchConfig(match)))).map(display) : positions().map(() => '—');
     return `<tr class="${round ? 'recorded-row ' : ''}${index === match.rounds.length || index === editing ? 'current-row' : ''}">
       <th scope="row">${number.format(index + 1)}${round?.type === HIND_ZAT ? ' <small>هند زات</small>' : ''}</th>${scores.map((score, team) => `<td${round ? ' class="recorded-cell"' : ''}>${round ? `<div class="recorded-score">${score}${round.type === HIND_ZAT ? '' : pencil(team, index)}</div>` : score}</td>`).join('')}
     </tr>${round ? `<tr class="row-actions"><td colspan="${match.names.length + 1}">
@@ -317,7 +319,7 @@ function history(limit, totals) {
 }
 
 function editor() {
-  const showKhalasa = allowsKhalasa(match.rounds, editing ?? match.rounds.length);
+  const showKhalasa = allowsKhalasa(match.rounds, editing ?? match.rounds.length, matchConfig(match));
   const maxJokers = jokerLimit(matchConfig(match));
   return `<section class="panel" aria-labelledby="round-title">
     <div class="panel-heading"><h2 id="round-title" tabindex="-1">${editing === null ? 'تسجيل اللعبة' : 'تعديل اللعبة'} ${number.format((editing ?? match.rounds.length) + 1)}</h2></div>
@@ -477,7 +479,7 @@ function updatePreview() {
     }
     const projected = matchStandings(rounds);
     const index = editing ?? match.rounds.length;
-    const scores = scoreRound(rounds[index], matchConfig(match), allowsDown(index, roundLimit(rounds)));
+    const scores = scoreRound(rounds[index], matchConfig(match), allowsDown(index, roundLimit(rounds, matchConfig(match))));
     preview.innerHTML = `<div class="preview-scores" style="--participants: ${scores.length}">${scores.map((score, team) =>
       `<div>${escape(match.names[team])}<b>${display(score)}</b>${pencil(team)}</div>`).join('')}</div>`;
     if (editing !== null || draft.overrides?.some(value => value != null)) {
@@ -585,6 +587,7 @@ function renderSetupFields() {
   const chooseJokers = setupMode === 'teams' && setupCount === 2;
   jokerSelect.parentElement.hidden = !chooseJokers;
   jokerSelect.disabled = !chooseJokers;
+  jokerSelect.value = String(settings.jokers);
   document.querySelector('#start-match').hidden = !setupCount;
 }
 
@@ -697,7 +700,6 @@ app.addEventListener('change', ({ target }) => {
     return;
   }
   if (target.id === 'setup-mode' || target.id === 'setup-count') {
-    document.querySelector('#setup-jokers').value = '';
     if (target.id === 'setup-mode') {
       setupMode = target.value;
       setupCount = 0;
@@ -799,14 +801,17 @@ app.addEventListener('submit', async event => {
       invalid.reportValidity();
       return;
     }
-    const jokers = rematch ? match.jokers : Number(document.querySelector('#setup-jokers').value);
-    if (!rematch && mode === 'teams' && inputs.length === 2 && jokers !== 2 && jokers !== 3) return;
+    const rules = matchRules(rematch && rulesLocked() ? matchConfig(match) : settings);
+    if (!rematch && mode === 'teams' && inputs.length === 2) {
+      rules.jokers = Number(document.querySelector('#setup-jokers').value);
+      if (rules.jokers !== 2 && rules.jokers !== 3) return;
+    }
     if (liveBusy) return;
     if (!sharedId) liveMessage = '';
     const members = mode === 'teams' ? readMembers(event.target, inputs.length, rematch ? match.members : undefined) : undefined;
     rememberMembers({ members });
     persist({ id: crypto.randomUUID(), mode, names: inputs.map(input => input.value.trim()),
-      members, rounds: [], ...(jokers ? { jokers } : {}) });
+      members, rounds: [], ...rules });
     editing = null;
     manualIndex = null;
     draft = blank();
@@ -1005,6 +1010,7 @@ function renderLiveMatch(snapshot) {
   const celebrateNow = snapshot?.complete && (!match?.complete || (snapshot.reason === 'hind-zat'
     && (match.reason !== snapshot.reason || match.winners[0] !== snapshot.winners[0])));
   match = snapshot;
+  applyBrand(snapshot?.brand);
   renderWatchedKabru(snapshot?.kabru, snapshot?.names, liveNow);
   if (!snapshot) {
     if (victory.open) victory.close();
@@ -1071,6 +1077,7 @@ function scheduleViewerFit() {
 
 function startWatching() {
   document.body.classList.add('live-viewer');
+  document.querySelector('#settings-menu').hidden = true;
   window.addEventListener('resize', scheduleViewerFit);
   window.visualViewport?.addEventListener('resize', scheduleViewerFit);
   document.fonts?.ready.then(scheduleViewerFit);
@@ -1109,9 +1116,91 @@ function startWatching() {
   }).catch(onError);
 }
 
+function applyBrand(brand) {
+  const { name, theme } = normalizeBrand(brand);
+  const label = document.querySelector('#edition-name');
+  label.textContent = name;
+  label.hidden = name === DEFAULT_SETTINGS.name && theme === DEFAULT_SETTINGS.theme;
+  label.parentElement.classList.toggle('custom-edition', !label.hidden);
+  label.parentElement.setAttribute('aria-label', name);
+  document.documentElement.dataset.theme = theme;
+  document.title = `حاسبة الهند – ${name}`;
+}
+
+function rulesLocked() {
+  return Boolean(match && !matchStandings().complete);
+}
+
+function defaultsChangeRules() {
+  return Object.keys(matchRules(DEFAULT_SETTINGS)).some(key => settings[key] !== DEFAULT_SETTINGS[key]);
+}
+
+const settingsMenu = document.querySelector('#settings-menu');
+const settingsDialog = document.querySelector('#settings-dialog');
+const settingsForm = document.querySelector('#settings-form');
+const settingsFields = settingsForm.elements;
+const settingsDefaults = document.querySelector('#settings-defaults');
+document.querySelector('#theme-options').innerHTML = Object.entries(THEMES).map(([value, label]) => `
+  <label class="theme-option">
+    <input type="radio" name="theme" value="${value}">
+    <span class="theme-card" data-palette="${value}">
+      <span class="theme-swatches" aria-hidden="true"><i></i><i></i></span>
+      <span class="theme-label">${escape(label)}</span>
+      <span class="theme-check" aria-hidden="true">✓</span>
+    </span>
+  </label>`).join('');
+
+function refreshSettingsLock() {
+  const locked = rulesLocked();
+  document.querySelector('#settings-rules').disabled = locked;
+  document.querySelector('#settings-lock').hidden = !locked;
+  settingsDefaults.disabled = locked && defaultsChangeRules();
+}
+
+function updateSettings(next) {
+  try {
+    settings = saveSettings(storage, next);
+  } catch {
+    announce('تعذّر حفظ الإعدادات على هذا الجهاز.');
+    return;
+  }
+  applyBrand(settings);
+  const setupJokers = document.querySelector('#setup-jokers');
+  if (setupJokers) setupJokers.value = String(settings.jokers);
+  settingsDialog.close();
+  if (match) syncSharing();
+}
+
+document.querySelector('#settings-open').addEventListener('click', () => {
+  settingsMenu.open = false;
+  settingsFields.name.value = settings.name;
+  settingsFields.theme.value = settings.theme;
+  settingsFields.baseRounds.value = String(settings.baseRounds);
+  settingsFields.jokers.value = String(settings.jokers);
+  settingsFields.penaltyEnabled.checked = settings.penaltyEnabled;
+  refreshSettingsLock();
+  settingsDialog.showModal();
+});
+document.querySelector('#settings-close').addEventListener('click', () => settingsDialog.close());
+settingsDialog.addEventListener('close', () => settingsMenu.querySelector('summary').focus());
+settingsForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const rules = rulesLocked() ? matchRules(settings) : {
+    baseRounds: Number(settingsFields.baseRounds.value),
+    jokers: Number(settingsFields.jokers.value),
+    penaltyEnabled: settingsFields.penaltyEnabled.checked,
+  };
+  updateSettings({ ...rules, name: settingsFields.name.value, theme: settingsFields.theme.value });
+});
+settingsDefaults.addEventListener('click', () => {
+  if (rulesLocked() && defaultsChangeRules()) return;
+  updateSettings(DEFAULT_SETTINGS);
+});
+
 if (watching) {
   startWatching();
 } else {
+  applyBrand(settings);
   try {
     readArchive(storage);
   } catch {

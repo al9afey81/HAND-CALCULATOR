@@ -1,5 +1,6 @@
+import { normalizeBrand } from './settings.mjs?v=2.9.1';
 import { firebaseConfig } from './live-config.mjs?v=2.8.2';
-import { allowsDown, allowsPenalty, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.8.10';
+import { allowsDown, allowsPenalty, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.9.1';
 
 export const configured = Boolean(firebaseConfig?.databaseURL && firebaseConfig?.apiKey);
 export const validLiveId = id => /^[a-f0-9]{32}$/.test(id);
@@ -43,22 +44,23 @@ async function ownerConnection() {
   return owner;
 }
 
-export function liveSnapshot(match, kabru) {
+export function liveSnapshot(match, kabru, brand) {
   const config = matchConfig(match);
   const current = standings(match.rounds, config);
   const { limit, totals, complete, winners, reason } = current;
   const gaps = scoreGaps(match.rounds, config, current);
-  const scheduledLimit = roundLimit(match.rounds);
+  const scheduledLimit = roundLimit(match.rounds, config);
   return {
     ...(config.mode === 'teams' && validMembers(match.members, config.count) ? { members: match.members } : {}),
     mode: config.mode, names: match.names, limit, totals, complete, winners, ...(reason ? { reason, scheduledLimit } : {}),
+    ...(brand ? { brand: normalizeBrand(brand) } : {}),
     ...(kabru ? { kabru } : {}), ...(gaps ? { gaps } : {}),
     scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, scheduledLimit))),
   };
 }
 
 export function decodeLiveSnapshot(payload) {
-  const { mode, names, limit, scores, totals, complete, winners, reason, scheduledLimit, kabru, gaps, members } = JSON.parse(payload);
+  const { mode, names, limit, scores, totals, complete, winners, reason, scheduledLimit, kabru, gaps, members, brand } = JSON.parse(payload);
   const count = names?.length;
   const supportedLimits = [5, 7, 9];
   const validScores = values => Array.isArray(values) && values.length === count && values.every(Number.isFinite);
@@ -101,6 +103,7 @@ export function decodeLiveSnapshot(payload) {
     }
   }
   return { mode, names, limit, scores, totals, complete, winners,
+    ...(brand ? { brand: normalizeBrand(brand) } : {}),
     ...(mode === 'teams' && validMembers(members, count) ? { members } : {}),
     ...(reason ? { reason, scheduledLimit: validSchedule ? scheduledLimit
       : supportedLimits.find(size => size >= scores.length) } : {}), ...(kabru ? { kabru } : {}), ...(validGaps ? { gaps } : {}) };
