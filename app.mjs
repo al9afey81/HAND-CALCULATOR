@@ -1071,7 +1071,8 @@ function scheduleViewerFit() {
     }
     const remaining = height - pageBottom() + logo.getBoundingClientRect().height;
     const availableWidth = Math.floor(remaining * 1672 / 324);
-    setLogoWidth(availableWidth >= 88 ? Math.min(naturalWidth, availableWidth) : 0);
+    const minimumWidth = logo.classList.contains('custom-edition') ? 124 : 88;
+    setLogoWidth(Math.min(naturalWidth, Math.max(minimumWidth, availableWidth)));
   });
 }
 

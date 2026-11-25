@@ -735,7 +735,23 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
-.live-viewer #edition-name { font-size: clamp(12px, min(4vw, 4vh), 40px); }
+.live-viewer .edition-panel.custom-edition {
+  container-type: inline-size;
+  min-height: 36px;
+  padding: 4px clamp(8px, 1.5vw, 18px);
+  grid-template-columns: minmax(0, 1fr);
+}
+.live-viewer #edition-name {
+  width: 100%;
+  min-width: 0;
+  font-size: clamp(12px, min(4vw, 4vh), 40px);
+  font-size: clamp(12px, min(10cqi, 4vh), 40px);
+  line-height: 1.6;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+}
 
 :root[data-theme="black"], .theme-card[data-palette="black"] {
   --green: #493c24; --green-deep: #141312; --theme-glow: #393128;
