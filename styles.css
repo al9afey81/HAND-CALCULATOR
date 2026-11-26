@@ -60,11 +60,28 @@ h1, h2, h3, p { margin: 0; }
 .masthead h1::before { background: linear-gradient(to left, transparent, #f6ce82); }
 .masthead h1::after { background: linear-gradient(to right, transparent, #f6ce82); }
 .edition-panel {
+  position: relative;
   width: min(100%, 850px);
   margin-inline: auto;
   aspect-ratio: 1672 / 324;
-  background: url('./assets/elite-reference.png?v=2.3.1') center / 100% auto no-repeat;
-  mask-image: linear-gradient(to bottom, transparent, #000 4%, #000 96%, transparent);
+}
+.edition-panel::after {
+  position: absolute;
+  content: "";
+  top: 50%;
+  left: 0;
+  width: 100%;
+  padding-top: 19.378%;
+  transform: translateY(-50%);
+  background: url('./assets/elite-reference.png?v=2.3.1') center / 100% 100% no-repeat;
+  /* Follow the artwork outline, including the ornament below the frame. */
+  clip-path: polygon(
+    8.8% 5%, 91.4% 5%, 93.4% 8.5%, 95.1% 14.7%, 96.6% 24%,
+    97.6% 35%, 98% 47%, 97.7% 58%, 97.2% 67%, 96.1% 75%,
+    94.4% 82%, 92% 87.6%, 53.4% 87.6%, 51.4% 91%, 50% 95%,
+    48.6% 91%, 46.6% 87.6%, 8% 87.6%, 5.6% 82%, 3.9% 75%,
+    2.8% 67%, 2.2% 58%, 2% 47%, 2.4% 35%, 3.2% 24%, 4.7% 14.7%, 6.7% 8.5%
+  );
 }
 .reset {
   position: absolute;
@@ -757,6 +774,7 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 }
 .edition-panel.custom-edition::before {
   position: absolute;
+  z-index: 1;
   content: "";
   inset: 15% 19% 20%;
   background: linear-gradient(180deg, #fff8e8, #faefd7 43%, #f2dfb8);
@@ -765,6 +783,7 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 }
 #edition-name {
   position: absolute;
+  z-index: 2;
   top: 50%;
   left: 19%;
   right: 19%;
