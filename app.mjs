@@ -83,7 +83,7 @@ function restoreSharing() {
 }
 
 function renderSharing() {
-  livePanel.hidden = !watching && !sharingOpen;
+  livePanel.hidden = watching ? !liveMessage : !sharingOpen;
   liveStatus.textContent = liveMessage;
   liveStart.hidden = watching || (!match && !sharedId);
   liveStart.setAttribute('aria-expanded', String(sharingOpen));
@@ -1054,38 +1054,72 @@ function scheduleViewerFit() {
     const footer = document.querySelector('.version');
     const logo = document.querySelector('.edition-panel');
     const label = logo.querySelector('#edition-name');
+    const table = document.querySelector('.history-panel table');
+    const cells = table.querySelectorAll('th, td');
+    for (const cell of cells) {
+      cell.style.paddingTop = '';
+      cell.style.paddingBottom = '';
+    }
     body.dataset.viewerDensity = 'comfortable';
     logo.style.removeProperty('width');
+    logo.style.removeProperty('min-height');
+    logo.style.removeProperty('height');
     const naturalWidth = logo.getBoundingClientRect().width;
-    logo.style.width = Math.min(180, naturalWidth) + 'px';
-    if (!label.hidden) label.style.fontSize = '14px';
-    const minimumWidth = label.hidden ? 88 : Math.max(124, logo.offsetWidth - label.clientWidth + label.scrollWidth);
-    const smallLogoWidth = Math.min(naturalWidth, Math.max(180, minimumWidth));
-    const setLogoWidth = width => {
+    const logoRatio = 324 / 1672;
+    const setLogoSize = width => {
       logo.style.width = width + 'px';
+      const capsuleHeight = Math.max(label.hidden ? 0 : 38, Math.floor(width * logoRatio));
+      logo.style.height = capsuleHeight + 'px';
       if (label.hidden) return;
-      // Measure the rendered name so older TV browsers do not need container query units.
-      let fontSize = Math.max(12, Math.min(40, Math.floor(width / 10), Math.floor(height / 25)));
+
+      // Fit the enlarged label to the existing capsule, in both dimensions.
+      const baseline = Math.max(12, Math.min(40, Math.floor(width / 10), Math.floor(height / 25)));
+      let fontSize = baseline * 1.5;
       label.style.fontSize = fontSize + 'px';
-      while (label.scrollWidth > label.clientWidth && fontSize > 1) {
-        fontSize = Math.max(1, Math.min(fontSize - 1, Math.floor(fontSize * label.clientWidth / label.scrollWidth)));
+      const textRange = document.createRange();
+      textRange.selectNodeContents(label);
+      const center = logo.getBoundingClientRect().top + capsuleHeight / 2;
+      const fitScale = () => {
+        const text = textRange.getBoundingClientRect();
+        const textHeight = 2 * Math.max(center - text.top, text.bottom - center);
+        return Math.min(label.clientWidth / Math.max(1, label.scrollWidth), (capsuleHeight - 4) / Math.max(1, textHeight));
+      };
+      for (let scale = fitScale(); scale < 1 && fontSize > 1; scale = fitScale()) {
+        fontSize = Math.max(1, Math.min(Math.ceil(fontSize) - 1, Math.floor(fontSize * scale)));
         label.style.fontSize = fontSize + 'px';
       }
     };
-    const pageBottom = () => footer.getBoundingClientRect().bottom + window.scrollY;
+    setLogoSize(Math.min(180, naturalWidth));
+    if (!label.hidden) label.style.fontSize = '14px';
+    const minimumWidth = label.hidden ? 88 : Math.max(124, logo.offsetWidth - label.clientWidth + label.scrollWidth);
+    const smallLogoWidth = Math.min(naturalWidth, Math.max(180, minimumWidth));
+    const remainingHeight = () => height - footer.getBoundingClientRect().bottom - window.scrollY;
 
+    setLogoSize(smallLogoWidth);
     for (const density of ['comfortable', 'compact', 'tight']) {
       body.dataset.viewerDensity = density;
-      setLogoWidth(smallLogoWidth);
-      const remaining = height - pageBottom();
-      if (remaining >= 0) {
-        setLogoWidth(Math.min(naturalWidth, Math.floor(smallLogoWidth + remaining * 1672 / 324)));
-        return;
-      }
+      if (remainingHeight() >= 0) break;
     }
-    const remaining = height - pageBottom() + logo.getBoundingClientRect().height;
-    const availableWidth = Math.floor(remaining * 1672 / 324);
-    setLogoWidth(Math.min(naturalWidth, Math.max(minimumWidth, availableWidth)));
+    let remaining = remainingHeight();
+    if (remaining < 0) {
+      const available = logo.offsetHeight + remaining;
+      setLogoSize(Math.min(naturalWidth, Math.max(Math.min(minimumWidth, 180), Math.floor(available / logoRatio))));
+      return;
+    }
+
+    const rows = table.rows.length;
+    // Reserve part of the available height for the table before growing the logo.
+    const rowSpace = Math.min(rows * 12, Math.floor(remaining / 2));
+    setLogoSize(Math.min(naturalWidth, Math.floor((logo.offsetHeight + remaining - rowSpace) / logoRatio)));
+    remaining = remainingHeight();
+    if (remaining <= 0) return;
+
+    const extraPadding = Math.min(16, Math.floor(remaining / (rows * 2)));
+    if (extraPadding === 0) return;
+    const basePadding = parseFloat(getComputedStyle(cells[0]).paddingTop);
+    for (const cell of cells) {
+      cell.style.paddingTop = cell.style.paddingBottom = basePadding + extraPadding + 'px';
+    }
   });
 }
 
@@ -1104,7 +1138,7 @@ function startWatching() {
   const updateStatus = () => {
     liveMessage = unavailable ? 'تعذّر فتح القيد المباشر.'
       : received && !match ? 'المشاركة متوقفة أو الرابط غير متاح.'
-      : match ? (connected ? 'مشاهدة مباشرة · للقراءة فقط' : 'انقطع الاتصال. يُعرض آخر قيد وصل.')
+      : match ? (connected ? '' : 'انقطع الاتصال. يُعرض آخر قيد وصل.')
       : 'جارٍ الاتصال بالقيد المباشر…';
     renderSharing();
     scheduleViewerFit();
