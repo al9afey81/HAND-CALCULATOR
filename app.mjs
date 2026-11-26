@@ -1040,6 +1040,58 @@ function renderLiveMatch(snapshot) {
   scheduleViewerFit();
 }
 
+const brandTextContext = document.createElement('canvas').getContext('2d');
+
+function fitDiwaniyaName() {
+  const label = document.querySelector('#edition-name');
+  if (label.hidden) return;
+  const capsule = label.parentElement.getBoundingClientRect();
+  if (!capsule.width || !capsule.height) return;
+
+  const style = getComputedStyle(label);
+  const { fontWeight, fontFamily } = style;
+  const marker = document.createElement('span');
+  marker.className = 'edition-baseline';
+  const textRange = document.createRange();
+  textRange.selectNode(label.firstChild);
+  label.style.marginTop = '';
+  label.append(marker);
+  const width = Math.min(capsule.width * 0.8, label.clientWidth);
+  const height = capsule.height - 10;
+  const center = capsule.top + capsule.height / 2;
+
+  function measure(size) {
+    label.style.fontSize = size + 'px';
+    const text = textRange.getBoundingClientRect();
+    if (brandTextContext) {
+      brandTextContext.font = `${fontWeight} ${size}px ${fontFamily}`;
+      const metrics = brandTextContext.measureText(label.textContent);
+      const ascent = metrics.actualBoundingBoxAscent;
+      const descent = metrics.actualBoundingBoxDescent;
+      if (Number.isFinite(ascent) && Number.isFinite(descent) && ascent + descent > 0) {
+        return {
+          width: Math.max(text.width, metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight),
+          height: ascent + descent,
+          center: marker.getBoundingClientRect().top + (descent - ascent) / 2,
+        };
+      }
+    }
+    return { width: text.width, height: text.height, center: (text.top + text.bottom) / 2 };
+  }
+
+  let lower = 1;
+  let upper = Math.max(2, Math.ceil(capsule.height * 3));
+  while (upper - lower > 0.25) {
+    const size = (lower + upper) / 2;
+    const bounds = measure(size);
+    if (bounds.width <= width && bounds.height <= height) lower = size;
+    else upper = size;
+  }
+  const fitted = measure(lower);
+  label.style.marginTop = center - fitted.center + 'px';
+  marker.remove();
+}
+
 let viewerFitFrame;
 
 function scheduleViewerFit() {
@@ -1070,24 +1122,6 @@ function scheduleViewerFit() {
       logo.style.width = width + 'px';
       const capsuleHeight = Math.max(label.hidden ? 0 : 38, Math.floor(width * logoRatio));
       logo.style.height = capsuleHeight + 'px';
-      if (label.hidden) return;
-
-      // Fit the enlarged label to the existing capsule, in both dimensions.
-      const baseline = Math.max(12, Math.min(40, Math.floor(width / 10), Math.floor(height / 25)));
-      let fontSize = baseline * 1.5;
-      label.style.fontSize = fontSize + 'px';
-      const textRange = document.createRange();
-      textRange.selectNodeContents(label);
-      const center = logo.getBoundingClientRect().top + capsuleHeight / 2;
-      const fitScale = () => {
-        const text = textRange.getBoundingClientRect();
-        const textHeight = 2 * Math.max(center - text.top, text.bottom - center);
-        return Math.min(label.clientWidth / Math.max(1, label.scrollWidth), (capsuleHeight - 4) / Math.max(1, textHeight));
-      };
-      for (let scale = fitScale(); scale < 1 && fontSize > 1; scale = fitScale()) {
-        fontSize = Math.max(1, Math.min(Math.ceil(fontSize) - 1, Math.floor(fontSize * scale)));
-        label.style.fontSize = fontSize + 'px';
-      }
     };
     setLogoSize(Math.min(180, naturalWidth));
     if (!label.hidden) label.style.fontSize = '14px';
@@ -1104,6 +1138,7 @@ function scheduleViewerFit() {
     if (remaining < 0) {
       const available = logo.offsetHeight + remaining;
       setLogoSize(Math.min(naturalWidth, Math.max(Math.min(minimumWidth, 180), Math.floor(available / logoRatio))));
+      fitDiwaniyaName();
       return;
     }
 
@@ -1111,6 +1146,7 @@ function scheduleViewerFit() {
     // Reserve part of the available height for the table before growing the logo.
     const rowSpace = Math.min(rows * 12, Math.floor(remaining / 2));
     setLogoSize(Math.min(naturalWidth, Math.floor((logo.offsetHeight + remaining - rowSpace) / logoRatio)));
+    fitDiwaniyaName();
     remaining = remainingHeight();
     if (remaining <= 0) return;
 
@@ -1173,6 +1209,7 @@ function applyBrand(brand) {
   label.parentElement.setAttribute('aria-label', name);
   document.documentElement.dataset.theme = theme;
   document.title = `حاسبة الهند – ${name}`;
+  if (!watching) fitDiwaniyaName();
 }
 
 function rulesLocked() {
@@ -1249,6 +1286,8 @@ if (watching) {
   startWatching();
 } else {
   applyBrand(settings);
+  window.addEventListener('resize', fitDiwaniyaName);
+  document.fonts?.ready.then(fitDiwaniyaName);
   try {
     readArchive(storage);
   } catch {
