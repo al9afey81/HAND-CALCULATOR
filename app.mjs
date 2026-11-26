@@ -1056,8 +1056,8 @@ function fitDiwaniyaName() {
   textRange.selectNode(label.firstChild);
   label.style.marginTop = '';
   label.append(marker);
-  const width = Math.min(capsule.width * 0.8, label.clientWidth);
-  const height = capsule.height - 10;
+  const width = label.clientWidth;
+  const height = capsule.height * 0.48;
   const center = capsule.top + capsule.height / 2;
 
   function measure(size) {
@@ -1125,7 +1125,7 @@ function scheduleViewerFit() {
     };
     setLogoSize(Math.min(180, naturalWidth));
     if (!label.hidden) label.style.fontSize = '14px';
-    const minimumWidth = label.hidden ? 88 : Math.max(124, logo.offsetWidth - label.clientWidth + label.scrollWidth);
+    const minimumWidth = label.hidden ? 88 : 124;
     const smallLogoWidth = Math.min(naturalWidth, Math.max(180, minimumWidth));
     const remainingHeight = () => height - footer.getBoundingClientRect().bottom - window.scrollY;
 

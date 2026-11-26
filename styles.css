@@ -753,19 +753,21 @@ body:has(#kabru-dialog[open]) > :not(#kabru-dialog) { visibility: hidden; }
 .edition-panel.custom-edition {
   position: relative;
   min-height: 30px;
-  border: 2px solid var(--gold);
-  border-radius: 999px;
-  background: var(--royal-gold);
-  color: var(--green-deep);
-  mask-image: none;
-  text-align: center;
-  box-shadow: inset 0 0 0 2px var(--green-deep);
+  color: #063423;
+}
+.edition-panel.custom-edition::before {
+  position: absolute;
+  content: "";
+  inset: 15% 19% 20%;
+  background: linear-gradient(180deg, #fff8e8, #faefd7 43%, #f2dfb8);
+  mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
 }
 #edition-name {
   position: absolute;
   top: 50%;
-  left: 12px;
-  right: 12px;
+  left: 19%;
+  right: 19%;
   transform: translateY(-50%);
   font-size: 16px;
   font-weight: 800;
