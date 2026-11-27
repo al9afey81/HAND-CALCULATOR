@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cardValue, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
+import { cardValue, lastPlaceAlert, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound, saveMatch, loadMatch, STORAGE_KEY } from '../scoring.mjs';
 
 function round(type = 0, penalty = null, down = [[], [], []], winner = 0) {
   return { type, penalty, down, winner, ...(type === 2 ? { jokerCount: 1 } : {}) };
@@ -308,4 +308,37 @@ test('recommendation wording follows the mode and omits sherha for two teams', (
   assert.equal(recommendationText(names, { ...entry, table: true }, solo).advice, 'إذا بتلعب، هند عادي وعط الشرهة للزعيم 😏');
   assert.match(recommendationText(names, { out: true }, teams).advice, /روحوا تفرجوا/);
   assert.match(recommendationText(names, { out: true }, solo).advice, /روح تفرج/);
+});
+
+test('تنبيه الخباص يعمل في اللعبة الأخيرة الفعلية فقط وبالصياغتين المطلوبتين', () => {
+  const teams = { mode: 'teams', count: 3 };
+  const match = (totals, count, extended = false) => [
+    { ...round(extended ? 2 : 1), overrides: totals },
+    ...Array.from({ length: count - 1 }, () => ({ ...round(1), overrides: [0, 0, 0] })),
+  ];
+  const noPenalty = 'يبيلك إعلان جيكرين وتصيد الأول، وإذا تبي تقعد على الطاولة هنّد هند عادي 😜';
+  const withPenalty = 'يبيلك إعلان جيكرين وتصيد الأول، وإذا تبي تقعد على الطاولة هنّد هند عادي وعط الشرهة للثاني 😜';
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 4), teams), noPenalty);
+  assert.equal(lastPlaceAlert(match([3200, 0, 2710], 4), teams), withPenalty);
+  assert.equal(lastPlaceAlert(match([0, 2710, 3200], 6, true), teams), withPenalty);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 8, true), { ...teams, baseRounds: 7 }), noPenalty);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 6), { ...teams, baseRounds: 7 }), noPenalty);
+
+  assert.equal(lastPlaceAlert(match([0, 2710, 3200], 4), { ...teams, penaltyEnabled: false }), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 4), { ...teams, penaltyEnabled: false }), noPenalty);
+  assert.equal(lastPlaceAlert(match([0, 2690, 3200], 4), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2691, 3200], 4), teams), withPenalty);
+  assert.equal(lastPlaceAlert(match([0, 2740, 3200], 4), teams), withPenalty);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 3), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 4, true), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 5), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 3200, 3200], 4), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 0, 3200], 4), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2550, 3000], 4), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2750, 3200], 4), { ...teams, mode: 'solo' }), undefined);
+
+  assert.match(lastPlaceAlert(match([0, 3950, 4400], 4), teams), /إعلان جيكرين ولون/);
+  assert.match(lastPlaceAlert(match([0, 4850, 5300], 4), teams), /إعلان ثلاث جواكر/);
+  assert.equal(lastPlaceAlert(match([0, 4850, 5300], 4), { ...teams, jokers: 2 }), undefined);
+  assert.match(lastPlaceAlert(match([0, 3450, 3900], 4), teams), /إعلان جيكرين وعط الشرهة للأول/);
 });

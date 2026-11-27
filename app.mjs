@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS, THEMES, loadSettings, matchRules, normalizeBrand, sav
 import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.9.1';
 import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.9.1';
 import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
-import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.9.1';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, lastPlaceAlert, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.9.8';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -247,8 +247,9 @@ function withDraft() {
   return recordRound(match.rounds, draft, editing ?? match.rounds.length, matchConfig(match));
 }
 
-function recommendations(totals, gaps) {
-  if (!gaps) return '';
+function recommendations(totals, gaps, lastPlace = '') {
+  const extra = lastPlace ? `<div>${escape(lastPlace)}</div>` : '';
+  if (!gaps) return extra;
   const leader = totals.indexOf(Math.min(...totals));
   let namedLeader = false;
   return gaps.map((entry, team) => {
@@ -258,7 +259,7 @@ function recommendations(totals, gaps) {
     if (chase) namedLeader = true;
     const chaseText = chase ? ` <span class="score-advice-chase">${escape(chase)}</span>` : '';
     return `<div>يا ${escape(match.names[team])}، ${escape(advice)}${chaseText}</div>`;
-  }).join('');
+  }).join('') + extra;
 }
 
 function cards(totals, winners = [], ranked = false) {
@@ -277,8 +278,8 @@ function cards(totals, winners = [], ranked = false) {
   }).join('')}</div>`;
 }
 
-function scoreHeader(totals, played, limit, gaps, owner = false) {
-  const advice = recommendations(totals, gaps);
+function scoreHeader(totals, played, limit, gaps, owner = false, lastPlace) {
+  const advice = recommendations(totals, gaps, lastPlace);
   const progress = `<span class="progress">${number.format(Math.min(played, limit))} من ${number.format(limit)} لعبات</span>`;
   return `<div class="score-title ${advice ? 'score-title-with-advice' : ''}">
     <h2 id="score-title"${owner ? ' tabindex="-1"' : ''}>مجموع النقاط</h2>
@@ -457,8 +458,9 @@ function updatePreview() {
   const config = matchConfig(match);
   const current = matchStandings();
   const ranked = config.mode === 'teams' && config.count === 3;
+  const lastPlace = lastPlaceAlert(match.rounds, config, current);
   const updateBoard = (totals, gaps) => {
-    const advice = recommendations(totals, gaps);
+    const advice = recommendations(totals, gaps, lastPlace);
     const notes = scoreboard.querySelector('.score-advice');
     notes.innerHTML = advice;
     notes.hidden = !advice;
@@ -625,7 +627,8 @@ function render() {
   const current = matchStandings();
   const { limit, totals, complete, winners, reason } = current;
   app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">
-    ${scoreHeader(totals, match.rounds.length, limit, scoreGaps(match.rounds, matchConfig(match), current), true)}
+    ${scoreHeader(totals, match.rounds.length, limit, scoreGaps(match.rounds, matchConfig(match), current), true,
+      lastPlaceAlert(match.rounds, matchConfig(match), current))}
     ${cards(totals, [], matchConfig(match).mode === 'teams' && totals.length === 3)}
   </section>
   ${!complete ? `<section class="panel rematch-panel" aria-label="إعادة المباراة">${rematchControls()}</section>` : ''}
