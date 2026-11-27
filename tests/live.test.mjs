@@ -141,3 +141,19 @@ test('an early Hind Zat retains the scheduled row count', () => {
   assert.equal(snapshot.limit, 2);
   assert.equal(snapshot.scheduledLimit, 7);
 });
+
+test('live viewers receive the exact final-round last-place recommendation and drop it at completion', () => {
+  const names = ['الأول', 'الثاني', 'الثالث'];
+  const rounds = [{ ...round(3), overrides: [0, 2710, 3200] }, ...Array.from({ length: 3 }, () => ({
+    ...round(3), overrides: [0, 0, 0],
+  }))];
+  const match = { mode: 'teams', names, rounds };
+  const snapshot = decodeLiveSnapshot(JSON.stringify(liveSnapshot(match)));
+  assert.equal(snapshot.lastPlace,
+    'يبيلك إعلان جيكرين وتصيد الأول، وإذا تبي تقعد على الطاولة هنّد هند عادي وعط الشرهة للثاني 😜');
+  const complete = liveSnapshot({ ...match, rounds: [...rounds, round(3)] });
+  assert.equal(complete.lastPlace, undefined);
+  assert.equal(decodeLiveSnapshot(JSON.stringify({ ...complete, lastPlace: snapshot.lastPlace })).lastPlace, undefined);
+  const earlier = liveSnapshot({ ...match, rounds: rounds.slice(0, 3) });
+  assert.equal(decodeLiveSnapshot(JSON.stringify({ ...earlier, lastPlace: snapshot.lastPlace })).lastPlace, undefined);
+});

@@ -1,6 +1,6 @@
 import { normalizeBrand } from './settings.mjs?v=2.9.1';
 import { firebaseConfig } from './live-config.mjs?v=2.8.2';
-import { allowsDown, allowsPenalty, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.9.1';
+import { allowsDown, allowsPenalty, lastPlaceAlert, matchConfig, roundLimit, scoreGaps, scoreRound, standings, HIND_ZAT, validMembers } from './scoring.mjs?v=2.9.9';
 
 export const configured = Boolean(firebaseConfig?.databaseURL && firebaseConfig?.apiKey);
 export const validLiveId = id => /^[a-f0-9]{32}$/.test(id);
@@ -49,18 +49,19 @@ export function liveSnapshot(match, kabru, brand) {
   const current = standings(match.rounds, config);
   const { limit, totals, complete, winners, reason } = current;
   const gaps = scoreGaps(match.rounds, config, current);
+  const lastPlace = lastPlaceAlert(match.rounds, config, current);
   const scheduledLimit = roundLimit(match.rounds, config);
   return {
     ...(config.mode === 'teams' && validMembers(match.members, config.count) ? { members: match.members } : {}),
     mode: config.mode, names: match.names, limit, totals, complete, winners, ...(reason ? { reason, scheduledLimit } : {}),
     ...(brand ? { brand: normalizeBrand(brand) } : {}),
-    ...(kabru ? { kabru } : {}), ...(gaps ? { gaps } : {}),
+    ...(kabru ? { kabru } : {}), ...(gaps ? { gaps } : {}), ...(lastPlace ? { lastPlace } : {}),
     scores: match.rounds.map((round, index) => scoreRound(round, config, allowsDown(index, scheduledLimit))),
   };
 }
 
 export function decodeLiveSnapshot(payload) {
-  const { mode, names, limit, scores, totals, complete, winners, reason, scheduledLimit, kabru, gaps, members, brand } = JSON.parse(payload);
+  const { mode, names, limit, scores, totals, complete, winners, reason, scheduledLimit, kabru, gaps, members, brand, lastPlace } = JSON.parse(payload);
   const count = names?.length;
   const supportedLimits = [5, 7, 9];
   const validScores = values => Array.isArray(values) && values.length === count && values.every(Number.isFinite);
@@ -89,6 +90,9 @@ export function decodeLiveSnapshot(payload) {
         && (penalty === undefined || (allowsPenalty({ mode, count }) && type > 0 && Number.isInteger(penalty)
           && penalty >= 0 && penalty < count && penalty !== index));
     });
+  const validLastPlace = !complete && mode === 'teams' && count === 3 && scores.length === limit - 1
+    && new Set(totals).size === 3 && typeof lastPlace === 'string' && lastPlace.length <= 180
+    && lastPlace.startsWith('يبيلك ') && lastPlace.includes(' وتصيد الأول');
   if (kabru !== undefined) {
     if (!kabru || typeof kabru.id !== 'string' || !/^[a-f0-9-]{36}$/.test(kabru.id)
         || !Array.isArray(kabru.positions) || !kabru.positions.length || kabru.positions.length >= count
@@ -106,7 +110,8 @@ export function decodeLiveSnapshot(payload) {
     ...(brand ? { brand: normalizeBrand(brand) } : {}),
     ...(mode === 'teams' && validMembers(members, count) ? { members } : {}),
     ...(reason ? { reason, scheduledLimit: validSchedule ? scheduledLimit
-      : supportedLimits.find(size => size >= scores.length) } : {}), ...(kabru ? { kabru } : {}), ...(validGaps ? { gaps } : {}) };
+      : supportedLimits.find(size => size >= scores.length) } : {}), ...(kabru ? { kabru } : {}), ...(validGaps ? { gaps } : {}),
+    ...(validLastPlace ? { lastPlace } : {}) };
 
 }
 

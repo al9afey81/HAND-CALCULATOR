@@ -229,27 +229,31 @@ export function lastPlaceAlert(rounds, config, current = standings(rounds, confi
   if (!(totals[first] < totals[second] && totals[second] < totals[last])) return;
 
   const penaltyEnabled = allowsPenalty(config);
-  const beats = (type, opponent, penalty = null) => {
+  const beats = (type, opponents, penalty = null) => {
     const points = scoreRound({ winner: last, type, penalty }, config, false);
     const projected = totals.map((total, team) => total + points[team]);
-    return projected.every(Number.isFinite) && projected[last] < projected[opponent];
+    return projected.every(Number.isFinite) && opponents.every(opponent => projected[last] < projected[opponent]);
   };
-
-  const ordinaryWithoutPenalty = beats(1, second);
-  if (!ordinaryWithoutPenalty && !(penaltyEnabled && beats(1, second, second))) return;
 
   const options = TYPES.map((rule, type) => ({ ...rule, type }))
     .filter(rule => rule.type !== HIND_ZAT && rule.type !== 0
       && (rule.jokers === null || rule.jokers <= jokerLimit(config)))
     .sort((a, b) => a.factor - b.factor);
   for (const rule of options) {
-    const withoutPenalty = beats(rule.type, first);
-    if (!withoutPenalty && !(penaltyEnabled && beats(rule.type, first, first))) continue;
-    if (rule.jokers < 2) return;
-    const label = rule.label.replace('جوكر', 'جيكر');
-    const chasePenalty = withoutPenalty ? '' : ' وعط الشرهة للأول';
+    const rivals = [first, second];
+    const withoutPenalty = beats(rule.type, rivals);
+    const recipient = !withoutPenalty && penaltyEnabled
+      ? rivals.find(opponent => beats(rule.type, rivals, opponent)) : undefined;
+    if (!withoutPenalty && recipient === undefined) continue;
+    if (rule.type < 2) return;
+    const label = rule.type === 2 ? 'هند جيكر' : rule.label.replace('جوكر', 'جيكر');
+    const chasePenalty = recipient === undefined ? '' : recipient === first ? ' وعط الشرهة للأول' : ' وعط الشرهة للثاني';
+    const chase = `يبيلك ${label}${chasePenalty} وتصيد الأول`;
+    if (rule.factor <= TYPES[3].factor) return chase;
+    const ordinaryWithoutPenalty = beats(1, [second]);
+    if (!ordinaryWithoutPenalty && !(penaltyEnabled && beats(1, [second], second))) return chase;
     const stayPenalty = ordinaryWithoutPenalty ? '' : ' وعط الشرهة للثاني';
-    return `يبيلك ${label}${chasePenalty} وتصيد الأول، وإذا تبي تقعد على الطاولة هنّد هند عادي${stayPenalty} 😜`;
+    return `${chase}، وإذا تبي تقعد على الطاولة هنّد هند عادي${stayPenalty} 😜`;
   }
 }
 

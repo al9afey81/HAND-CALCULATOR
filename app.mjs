@@ -1,8 +1,8 @@
 import { DEFAULT_SETTINGS, THEMES, loadSettings, matchRules, normalizeBrand, saveSettings } from './settings.mjs?v=2.9.1';
-import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.9.1';
+import { configured, createLive, liveNow, liveSnapshot, publishLive, stopLive, validLiveId, watchLive } from './live.mjs?v=2.9.9';
 import { archiveMatch, moveRound, readArchive, writeArchive } from './archive.mjs?v=2.9.1';
 import { openKabru, renderWatchedKabru } from './kabru.mjs?v=2.8.3';
-import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, lastPlaceAlert, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.9.8';
+import { latinDigits, TYPES, HIND_ZAT, jokerLimit, FAILED_DECLARATIONS, jokerCapacity, hasLoserDeclaration, declaredJokers, roundLimit, allowsKhalasa, allowsDown, allowsPenalty, matchConfig, STORAGE_KEY, loadMatch, saveMatch, recommendationText, lastPlaceAlert, scoreGaps, scoreRound, standings, recordRound, removeRound } from './scoring.mjs?v=2.9.9';
 
 const app = document.querySelector('#app');
 const reset = document.querySelector('#reset');
@@ -247,19 +247,20 @@ function withDraft() {
   return recordRound(match.rounds, draft, editing ?? match.rounds.length, matchConfig(match));
 }
 
-function recommendations(totals, gaps, lastPlace = '') {
+function recommendations(totals, gaps, lastPlace = '', lastTeam = totals.indexOf(Math.max(...totals))) {
   const extra = lastPlace ? `<div>${escape(lastPlace)}</div>` : '';
   if (!gaps) return extra;
   const leader = totals.indexOf(Math.min(...totals));
   let namedLeader = false;
   return gaps.map((entry, team) => {
+    if (extra && team === lastTeam) return extra;
     if (entry.gap === 0) return '';
     const { advice, chase } = recommendationText(match.names, entry, matchConfig(match),
       namedLeader ? undefined : leader);
     if (chase) namedLeader = true;
     const chaseText = chase ? ` <span class="score-advice-chase">${escape(chase)}</span>` : '';
     return `<div>يا ${escape(match.names[team])}، ${escape(advice)}${chaseText}</div>`;
-  }).join('') + extra;
+  }).join('');
 }
 
 function cards(totals, winners = [], ranked = false) {
@@ -460,7 +461,7 @@ function updatePreview() {
   const ranked = config.mode === 'teams' && config.count === 3;
   const lastPlace = lastPlaceAlert(match.rounds, config, current);
   const updateBoard = (totals, gaps) => {
-    const advice = recommendations(totals, gaps, lastPlace);
+    const advice = recommendations(totals, gaps, lastPlace, current.totals.indexOf(Math.max(...current.totals)));
     const notes = scoreboard.querySelector('.score-advice');
     notes.innerHTML = advice;
     notes.hidden = !advice;
@@ -1026,7 +1027,7 @@ function renderLiveMatch(snapshot) {
     `<tr><th scope="row">${number.format(index + 1)}${reason === 'hind-zat' && index === limit - 1 ? ' <small>هند زات</small>' : ''}${index >= limit && scores[index] ? ' <small class="subtle">معلّقة</small>' : ''}</th>
       ${names.map((_, position) => `<td>${scores[index] ? display(scores[index][position]) : '—'}</td>`).join('')}</tr>`).join('');
   app.innerHTML = `<section class="scoreboard" aria-labelledby="score-title">
-    ${scoreHeader(totals, scores.length, limit, snapshot.gaps)}
+    ${scoreHeader(totals, scores.length, limit, snapshot.gaps, false, snapshot.lastPlace)}
     ${cards(totals, [], snapshot.mode === 'teams' && totals.length === 3)}
   </section>
   ${complete ? `<section class="panel final" aria-labelledby="final-title" ${victory.open ? 'hidden' : ''}>

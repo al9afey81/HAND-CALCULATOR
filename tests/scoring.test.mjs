@@ -324,9 +324,9 @@ test('تنبيه الخباص يعمل في اللعبة الأخيرة الفع
   assert.equal(lastPlaceAlert(match([0, 2750, 3200], 8, true), { ...teams, baseRounds: 7 }), noPenalty);
   assert.equal(lastPlaceAlert(match([0, 2750, 3200], 6), { ...teams, baseRounds: 7 }), noPenalty);
 
-  assert.equal(lastPlaceAlert(match([0, 2710, 3200], 4), { ...teams, penaltyEnabled: false }), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2710, 3200], 4), { ...teams, penaltyEnabled: false }), 'يبيلك إعلان جيكرين وتصيد الأول');
   assert.equal(lastPlaceAlert(match([0, 2750, 3200], 4), { ...teams, penaltyEnabled: false }), noPenalty);
-  assert.equal(lastPlaceAlert(match([0, 2690, 3200], 4), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 2690, 3200], 4), teams), 'يبيلك إعلان جيكرين وتصيد الأول');
   assert.equal(lastPlaceAlert(match([0, 2691, 3200], 4), teams), withPenalty);
   assert.equal(lastPlaceAlert(match([0, 2740, 3200], 4), teams), withPenalty);
   assert.equal(lastPlaceAlert(match([0, 2750, 3200], 3), teams), undefined);
@@ -334,7 +334,17 @@ test('تنبيه الخباص يعمل في اللعبة الأخيرة الفع
   assert.equal(lastPlaceAlert(match([0, 2750, 3200], 5), teams), undefined);
   assert.equal(lastPlaceAlert(match([0, 3200, 3200], 4), teams), undefined);
   assert.equal(lastPlaceAlert(match([0, 0, 3200], 4), teams), undefined);
-  assert.equal(lastPlaceAlert(match([0, 2550, 3000], 4), teams), undefined);
+  assert.equal(lastPlaceAlert(match([0, 400, 800], 4), teams), 'يبيلك هند جيكر وتصيد الأول');
+  assert.equal(lastPlaceAlert(match([0, 1100, 1500], 4), teams), 'يبيلك إعلان جيكر وتصيد الأول');
+  assert.equal(lastPlaceAlert(match([0, 2050, 2500], 4), teams),
+    'يبيلك إعلان جيكر ولون وتصيد الأول، وإذا تبي تقعد على الطاولة هنّد هند عادي 😜');
+  assert.equal(lastPlaceAlert(match([0, 2010, 2500], 4), teams),
+    'يبيلك إعلان جيكر ولون وتصيد الأول، وإذا تبي تقعد على الطاولة هنّد هند عادي وعط الشرهة للثاني 😜');
+  assert.equal(lastPlaceAlert(match([0, 100, 400], 4), teams), undefined);
+  const noChance = match([0, 500, 10000], 4);
+  assert.equal(lastPlaceAlert(noChance, teams), undefined);
+  assert.equal(recommendationText(['الأول', 'الثاني', 'الثالث'], scoreGaps(noChance, teams)[2], teams).advice,
+    'يمدحون التيك توك، روحوا تفرجوا عليه 🤣');
   assert.equal(lastPlaceAlert(match([0, 2750, 3200], 4), { ...teams, mode: 'solo' }), undefined);
 
   assert.match(lastPlaceAlert(match([0, 3950, 4400], 4), teams), /إعلان جيكرين ولون/);
